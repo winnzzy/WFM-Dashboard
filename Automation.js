@@ -2,182 +2,172 @@
  * ==========================================================
  * BREAK AUTOMATION V2
  * ==========================================================
+ * Manual break start/return triggered by Team Lead menu.
+ *
+ * NOTE: COL constants are 0-based (array index).
+ *       Sheet getRange() is 1-based, so we use COL.xxx + 1.
  */
 
-function startBreak(){
+/**
+ * Starts a break for the currently selected agent row.
+ */
+function startBreak() {
 
-  const sh = SpreadsheetApp.getActive()
-    .getSheetByName("Daily Operations");
+  var ss = SpreadsheetApp.getActive();
+  var sh = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
 
-  const row = sh.getActiveCell().getRow();
+  var row = sh.getActiveCell().getRow();
 
-  if(row < 6){
-    SpreadsheetApp.getUi().alert("Select an agent.");
+  if (row < OPS_DATA_START_ROW) {
+    SpreadsheetApp.getUi().alert("Select an agent row (row 6 or below).");
     return;
   }
 
-  const status = sh.getRange(row,COL.STATUS).getValue();
+  var statusCell = sh.getRange(row, COL.STATUS + 1).getValue();
 
-  if(status=="On Break"){
+  if (statusCell === STATUS.ON_BREAK) {
     SpreadsheetApp.getUi().alert("Agent is already on break.");
     return;
   }
-  const shift = sh.getRange(row,COL.SHIFT).getValue();
 
-if (!isWithinBreakWindow(shift)) {
+  // --- Check break window ---
+  var shift = sh.getRange(row, COL.SHIFT + 1).getValue();
 
-  const ui = SpreadsheetApp.getUi();
+  if (!isWithinBreakWindow(shift)) {
 
-  const response = ui.alert(
-    "Supervisor Override",
-    "This agent is outside the approved break window.\n\nContinue anyway?",
-    ui.ButtonSet.YES_NO
-  );
+    var ui = SpreadsheetApp.getUi();
 
-  if (response != ui.Button.YES) {
-    return;
+    var response = ui.alert(
+      "Supervisor Override",
+      "This agent is outside the approved break window.\n\nContinue anyway?",
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response !== ui.Button.YES) {
+      return;
+    }
+
+    // Record override
+    sh.getRange(row, COL.OVERRIDE + 1).setValue("YES");
+
+    sh.getRange(row, COL.OVERRIDE_TIME + 1)
+      .setValue(new Date())
+      .setNumberFormat("h:mm AM/PM");
+
+    sh.getRange(row, COL.REMARKS + 1)
+      .setValue("Outside approved break window");
   }
 
-  sh.getRange(row, COL.OVERRIDE)
-    .setValue("YES");
+  // --- Check max 2 agents on break + same-queue conflict ---
+  var queue = sh.getRange(row, COL.QUEUE + 1).getValue();
 
-  sh.getRange(row, COL.OVERRIDE_TIME)
-    .setValue(new Date())
-    .setNumberFormat("h:mm AM/PM");
+  var data = sh.getRange(
+    OPS_DATA_START_ROW,
+    1,
+    MAX_OPS_ROWS,
+    OPS_COL_COUNT
+  ).getValues();
 
-  sh.getRange(row, COL.REMARKS)
-    .setValue("Outside approved break window");
+  var agentsOnBreak = 0;
+  var sameQueue = false;
 
-}
+  for (var i = 0; i < data.length; i++) {
 
-  const queue = sh.getRange(row,COL.QUEUE).getValue();
+    var r = data[i];
 
-  const data = sh.getRange(6,1,300,16).getValues();
-
-  let agentsOnBreak = 0;
-  let sameQueue = false;
-
-  data.forEach(r=>{
-
-    if(r[COL.STATUS-1]!="On Break") return;
+    if (r[COL.STATUS] !== STATUS.ON_BREAK) continue;
 
     agentsOnBreak++;
 
-    if(r[COL.QUEUE-1]==queue){
-      sameQueue=true;
+    if (r[COL.QUEUE] === queue) {
+      sameQueue = true;
     }
+  }
 
-  });
-
-  if(agentsOnBreak>=2){
-
+  if (agentsOnBreak >= 2) {
     SpreadsheetApp.getUi().alert(
       "Maximum of 2 agents are already on break."
     );
-
     return;
-
   }
 
-  if(sameQueue){
-
+  if (sameQueue) {
     SpreadsheetApp.getUi().alert(
-      "Another agent on '"+queue+"' is already on break."
+      "Another agent on '" + queue + "' is already on break."
     );
-
     return;
-
   }
 
-  const now = new Date();
+  // --- Set break start ---
+  var now = new Date();
 
-  sh.getRange(row,COL.ACTUAL_OUT)
+  sh.getRange(row, COL.ACTUAL_OUT + 1)
     .setValue(now)
     .setNumberFormat("h:mm AM/PM");
 
-  sh.getRange(row,COL.STATUS)
-    .setValue("On Break");
+  sh.getRange(row, COL.STATUS + 1)
+    .setValue(STATUS.ON_BREAK);
 
   refreshDashboard();
-
-
 }
 
-function returnFromBreak(){
 
-  const sh=SpreadsheetApp.getActive()
-  .getSheetByName("Daily Operations");
+/**
+ * Returns the currently selected agent from break.
+ */
+function returnFromBreak() {
 
-  const row=sh.getActiveCell().getRow();
+  var ss = SpreadsheetApp.getActive();
+  var sh = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
 
-  if(row<6){
+  var row = sh.getActiveCell().getRow();
 
-    SpreadsheetApp.getUi()
-    .alert("Select an agent.");
-
+  if (row < OPS_DATA_START_ROW) {
+    SpreadsheetApp.getUi().alert("Select an agent row (row 6 or below).");
     return;
-
   }
 
-  if(sh.getRange(row,COL.STATUS).getValue()!="On Break"){
+  var statusCell = sh.getRange(row, COL.STATUS + 1).getValue();
 
-    SpreadsheetApp.getUi()
-    .alert("Agent is not on break.");
-
+  if (statusCell !== STATUS.ON_BREAK) {
+    SpreadsheetApp.getUi().alert("Agent is not on break.");
     return;
-
   }
 
-  const actualBack=new Date();
+  var actualBack = new Date();
 
-  sh.getRange(row,COL.ACTUAL_BACK)
+  sh.getRange(row, COL.ACTUAL_BACK + 1)
     .setValue(actualBack)
     .setNumberFormat("h:mm AM/PM");
 
-  const actualOut=
-    sh.getRange(row,COL.ACTUAL_OUT).getValue();
+  var actualOut = sh.getRange(row, COL.ACTUAL_OUT + 1).getValue();
 
-  const scheduledBack=
-    sh.getRange(row,COL.SCHEDULED_BACK).getValue();
+  var scheduledBack = sh.getRange(row, COL.SCHEDULED_BACK + 1).getValue();
 
-  const breakMinutes=
-    Math.round(
-      (actualBack-actualOut)/60000
-    );
+  var breakMinutes = Math.round(
+    (actualBack - actualOut) / 60000
+  );
 
-  sh.getRange(row,COL.BREAK_USED)
+  sh.getRange(row, COL.BREAK_USED + 1)
     .setValue(breakMinutes);
 
-  const variance=
-    Math.round(
-      (actualBack-scheduledBack)/60000
-    );
+  var variance = Math.round(
+    (actualBack - scheduledBack) / 60000
+  );
 
-  if(variance<0){
-
-    sh.getRange(row,COL.VARIANCE)
-      .setValue(
-        "Early by "+Math.abs(variance)+" mins"
-      );
-
-  }else if(variance==0){
-
-    sh.getRange(row,COL.VARIANCE)
+  if (variance < 0) {
+    sh.getRange(row, COL.VARIANCE + 1)
+      .setValue("Early by " + Math.abs(variance) + " mins");
+  } else if (variance === 0) {
+    sh.getRange(row, COL.VARIANCE + 1)
       .setValue("On Time");
-
-  }else{
-
-    sh.getRange(row,COL.VARIANCE)
-      .setValue(
-        "Late by "+variance+" mins"
-      );
-
+  } else {
+    sh.getRange(row, COL.VARIANCE + 1)
+      .setValue("Late by " + variance + " mins");
   }
 
-  sh.getRange(row,COL.STATUS)
-    .setValue("On Queue");
+  sh.getRange(row, COL.STATUS + 1)
+    .setValue(STATUS.ON_QUEUE);
 
   refreshDashboard();
-
-
 }

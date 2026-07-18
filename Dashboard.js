@@ -2,196 +2,162 @@
  * ==========================================================
  * DASHBOARD
  * ==========================================================
+ * Builds the main Dashboard sheet with KPI cards,
+ * live break monitor, queue share, late returns,
+ * and supervisor override sections.
  */
 
+/**
+ * Builds the complete Dashboard sheet layout.
+ * All section ranges and colors use shared constants.
+ */
 function buildDashboardSheet() {
 
-  const ss = SpreadsheetApp.getActive();
+  var ss = SpreadsheetApp.getActive();
 
-  let sh = ss.getSheetByName("Dashboard");
+  var dash = ss.getSheetByName(SHEETS.DASHBOARD);
 
-  if (!sh) {
-    sh = ss.insertSheet("Dashboard");
+  if (!dash) {
+    dash = ss.insertSheet(SHEETS.DASHBOARD);
   }
 
-  sh.clear();
-  sh.setHiddenGridlines(true);
+  dash.clear();
 
-  //==========================================================
-  // TITLE
-  //==========================================================
+  // --- KPI Cards Row 1 ---
+  createKPICard(
+    dash, "A1", "B3",
+    "Total Active Agents Today",
+    "0",
+    COLORS.HEADER_BG,
+    COLORS.HEADER_TEXT
+  );
 
-  sh.getRange("A1:P2")
+  createKPICard(
+    dash, "D1", "E3",
+    "Currently On Queue",
+    "0",
+    "#1B5E20",
+    COLORS.HEADER_TEXT
+  );
+
+  createKPICard(
+    dash, "G1", "H3",
+    "Currently On Break",
+    "0",
+    "#E65100",
+    COLORS.HEADER_TEXT
+  );
+
+  createKPICard(
+    dash, "J1", "K3",
+    "Break Overdue",
+    "0",
+    COLORS.LATE_HEADER_BG,
+    COLORS.HEADER_TEXT
+  );
+
+  // --- KPI Cards Row 2 ---
+  createKPICard(
+    dash, "A5", "B7",
+    "Breaks Started On Time",
+    "0",
+    COLORS.SECTION_HEADER_BG,
+    "#000000"
+  );
+
+  createKPICard(
+    dash, "D5", "E7",
+    "Breaks Started Late",
+    "0",
+    COLORS.OVERRIDE_HEADER_SUB,
+    "#000000"
+  );
+
+  createKPICard(
+    dash, "G5", "H7",
+    "Avg Break Duration (min)",
+    "0",
+    COLORS.SECTION_HEADER_BG,
+    "#000000"
+  );
+
+  createKPICard(
+    dash, "J5", "K7",
+    "Supervisor Overrides Today",
+    "0",
+    COLORS.OVERRIDE_HEADER_BG,
+    COLORS.HEADER_TEXT
+  );
+
+  // --- KPI Cards Row 3 ---
+  createKPICard(
+    dash, "A9", "B11",
+    "Agents Absent Today",
+    "0",
+    COLORS.LATE_HEADER_SUB,
+    "#000000"
+  );
+
+  createKPICard(
+    dash, "D9", "E11",
+    "Agents Logged Out",
+    "0",
+    COLORS.LATE_HEADER_SUB,
+    "#000000"
+  );
+
+  createKPICard(
+    dash, "G9", "H11",
+    "Break Compliance %",
+    "0%",
+    COLORS.SECTION_HEADER_BG,
+    "#000000"
+  );
+
+  createKPICard(
+    dash, "J9", "K11",
+    "Shifts Covered",
+    "0",
+    COLORS.SECTION_HEADER_BG,
+    "#000000"
+  );
+
+  // --- Break Slots Section ---
+  dash.getRange("A13:H13")
     .merge()
-    .setValue("CONTACT CENTER TEAM LEAD DASHBOARD")
-    .setBackground("#0F4C81")
-    .setFontColor("#FFFFFF")
+    .setValue("TODAY'S BREAK SLOTS")
+    .setBackground(COLORS.HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold")
-    .setFontSize(20)
     .setHorizontalAlignment("center");
 
-  sh.getRange("N3").setValue("Today");
+  var breakHeaders = [
+    "Agent",
+    "Queue",
+    "Break Slot",
+    "Scheduled Out",
+    "Scheduled Back",
+    "Actual Login",
+    "Actual Out",
+    "Actual Back"
+  ];
 
-  sh.getRange("O3")
-    .setFormula("=TODAY()")
-    .setNumberFormat("ddd dd-mmm-yyyy");
+  dash.getRange("A14:H14").setValues([breakHeaders]);
 
-  //==========================================================
-  // KPI CARDS
-  //==========================================================
-
-  createKPICard(
-    sh,
-    "A4",
-    "Present",
-    "=COUNTA('Daily Operations'!B6:B300)"
-  );
-
-  createKPICard(
-    sh,
-    "D4",
-    "On Queue",
-    "=COUNTIF('Daily Operations'!O6:O300,\"On Queue\")"
-  );
-
-  createKPICard(
-    sh,
-    "G4",
-    "On Break",
-    "=COUNTIF('Daily Operations'!O6:O300,\"On Break\")"
-  );
-
-  createKPICard(
-    sh,
-    "J4",
-    "OFF",
-    "=COUNTIFS('Agent Roster'!F2:F300,\"OFF\",'Agent Roster'!G2:G300,\"Active\")"
-  );
-
-  createKPICard(
-    sh,
-    "M4",
-    "Overrides",
-    "=COUNTIF('Daily Operations'!Q6:Q300,\"YES\")"
-  );
-
-  createKPICard(
-    sh,
-    "A8",
-    "Late Returns",
-    "=COUNTIF('Daily Operations'!N6:N300,\"Late*\")"
-  );
-
-  createKPICard(
-    sh,
-    "D8",
-    "Early Returns",
-    "=COUNTIF('Daily Operations'!N6:N300,\"Early*\")"
-  );
-
-  createKPICard(
-    sh,
-    "G8",
-    "Morning",
-    "=COUNTIF('Daily Operations'!E6:E300,\"Morning\")"
-  );
-
-  createKPICard(
-    sh,
-    "J8",
-    "Afternoon",
-    "=COUNTIF('Daily Operations'!E6:E300,\"Afternoon\")"
-  );
-
-  createKPICard(
-    sh,
-    "M8",
-    "Night",
-    "=COUNTIF('Daily Operations'!E6:E300,\"Night\")"
-  );
-
-  //==========================================================
-  // QUEUE COVERAGE
-  //==========================================================
-
-  sh.getRange("A13:E13")
-    .merge()
-    .setValue("QUEUE COVERAGE")
-    .setBackground("#0F4C81")
-    .setFontColor("white")
+  dash.getRange("A14:H14")
+    .setBackground(COLORS.SECTION_HEADER_BG)
     .setFontWeight("bold");
 
-  sh.getRange("A14:B17").setValues([
-
-    [
-      "Call",
-      "=COUNTIF('Daily Operations'!F6:F300,\"Call\")"
-    ],
-
-    [
-      "Email",
-      "=COUNTIF('Daily Operations'!F6:F300,\"Email\")"
-    ],
-
-    [
-      "Clara",
-      "=COUNTIF('Daily Operations'!F6:F300,\"Clara\")"
-    ],
-
-    [
-      "Ebanqo",
-      "=COUNTIF('Daily Operations'!F6:F300,\"Ebanqo\")"
-    ]
-
-  ]);
-
-  //==========================================================
-  // SHIFT COVERAGE
-  //==========================================================
-
-  sh.getRange("G13:K13")
-    .merge()
-    .setValue("SHIFT COVERAGE")
-    .setBackground("#0F4C81")
-    .setFontColor("white")
-    .setFontWeight("bold");
-
-  sh.getRange("G14:H17").setValues([
-
-    [
-      "Morning",
-      "=COUNTIF('Daily Operations'!E6:E300,\"Morning\")"
-    ],
-
-    [
-      "Afternoon",
-      "=COUNTIF('Daily Operations'!E6:E300,\"Afternoon\")"
-    ],
-
-    [
-      "Night",
-      "=COUNTIF('Daily Operations'!E6:E300,\"Night\")"
-    ],
-
-    [
-      "OFF",
-      "=COUNTIFS('Agent Roster'!F2:F300,\"OFF\",'Agent Roster'!G2:G300,\"Active\")"
-    ]
-
-  ]);
-    //==========================================================
-  // LIVE BREAK MONITOR
-  //==========================================================
-
-  sh.getRange("A21:H21")
+  // --- Live Break Monitor Section ---
+  dash.getRange("A22:H22")
     .merge()
     .setValue("LIVE BREAK MONITOR")
-    .setBackground("#0F4C81")
-    .setFontColor("white")
+    .setBackground(COLORS.HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
 
-  sh.getRange("A22:H22").setValues([[
+  var monitorHeaders = [
     "Agent",
     "Queue",
     "Break Slot",
@@ -200,111 +166,160 @@ function buildDashboardSheet() {
     "Minutes Left",
     "Status",
     "Variance"
-  ]]);
+  ];
 
-  sh.getRange("A22:H22")
-    .setBackground("#D9EAD3")
-    .setFontWeight("bold")
-    .setHorizontalAlignment("center");
+  dash.getRange("A23:H23").setValues([monitorHeaders]);
 
-  sh.getRange("A23:H40")
-    .setBorder(true, true, true, true, true, true);
+  dash.getRange("A23:H23")
+    .setBackground(COLORS.SECTION_HEADER_BG)
+    .setFontWeight("bold");
 
-  //==========================================================
-  // LIVE QUEUE SHARE
-  //==========================================================
-
-  sh.getRange("J21:N21")
+  // --- Queue Share Section ---
+  dash.getRange("J13:N13")
     .merge()
-    .setValue("LIVE QUEUE SHARE")
-    .setBackground("#0F4C81")
-    .setFontColor("white")
+    .setValue("QUEUE SHARE")
+    .setBackground(COLORS.HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
 
-  sh.getRange("J22:N22").setValues([[
+  var queueHeaders = [
     "Queue",
-    "Assigned",
+    "Total",
     "On Queue",
     "On Break",
-    "Coverage"
-  ]]);
+    "Break Overdue"
+  ];
 
-  sh.getRange("J22:N22")
-    .setBackground("#D9EAD3")
-    .setFontWeight("bold")
-    .setHorizontalAlignment("center");
+  dash.getRange("J14:N14").setValues([queueHeaders]);
 
-  sh.getRange("J23:N30")
-    .setBorder(true, true, true, true, true, true);
+  dash.getRange("J14:N14")
+    .setBackground(COLORS.SECTION_HEADER_BG)
+    .setFontWeight("bold");
 
-  //==========================================================
-  // LATE RETURNS
-  //==========================================================
-
-  sh.getRange("A43:H43")
+  // --- Break Overdue Section ---
+  dash.getRange("J20:N20")
     .merge()
-    .setValue("LATE RETURNS")
-    .setBackground("#C62828")
-    .setFontColor("white")
+    .setValue("BREAK OVERDUE")
+    .setBackground(COLORS.LATE_HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
 
-  sh.getRange("A44:H44").setValues([[
+  var overdueHeaders = [
     "Agent",
     "Queue",
     "Expected Back",
-    "Actual Back",
-    "Variance",
-    "Supervisor",
-    "Override",
-    "Remarks"
-  ]]);
+    "Minutes Overdue",
+    "Status"
+  ];
 
-  sh.getRange("A44:H44")
-    .setBackground("#F4CCCC")
+  dash.getRange("J21:N21").setValues([overdueHeaders]);
+
+  dash.getRange("J21:N21")
+    .setBackground(COLORS.LATE_HEADER_SUB)
     .setFontWeight("bold");
 
-  sh.getRange("A45:H60")
-    .setBorder(true, true, true, true, true, true);
-
-  //==========================================================
-  // SUPERVISOR OVERRIDES
-  //==========================================================
-
-  sh.getRange("J43:P43")
+  // --- Supervisor Overrides Section ---
+  dash.getRange("J37:N37")
     .merge()
     .setValue("SUPERVISOR OVERRIDES")
-    .setBackground("#F57C00")
-    .setFontColor("white")
+    .setBackground(COLORS.OVERRIDE_HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
 
-  sh.getRange("J44:P44").setValues([[
+  var overrideHeaders = [
     "Agent",
     "Queue",
-    "Time",
-    "Supervisor",
+    "Override Time",
     "Reason",
-    "Status",
-    "Remarks"
-  ]]);
+    "Supervisor"
+  ];
 
-  sh.getRange("J44:P44")
-    .setBackground("#FCE5CD")
+  dash.getRange("J38:N38").setValues([overrideHeaders]);
+
+  dash.getRange("J38:N38")
+    .setBackground(COLORS.OVERRIDE_HEADER_SUB)
     .setFontWeight("bold");
 
-  sh.getRange("J45:P60")
-    .setBorder(true, true, true, true, true, true);
+  // --- Agent Status Section ---
+  dash.getRange("A36:H36")
+    .merge()
+    .setValue("AGENT STATUS")
+    .setBackground(COLORS.HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
 
-  //==========================================================
-  // FORMATTING
-  //==========================================================
+  var statusHeaders = [
+    "Agent",
+    "Queue",
+    "Shift",
+    "Break Slot",
+    "Status",
+    "Break Used (min)",
+    "Variance",
+    "Remarks"
+  ];
 
-  sh.setFrozenRows(3);
+  dash.getRange("A37:H37").setValues([statusHeaders]);
 
-  sh.autoResizeColumns(1,16);
+  dash.getRange("A37:H37")
+    .setBackground(COLORS.SECTION_HEADER_BG)
+    .setFontWeight("bold");
 
-  sh.setColumnWidths(1,16,120);
+  // --- System Log Section ---
+  dash.getRange("A70:H70")
+    .merge()
+    .setValue("SYSTEM LOG")
+    .setBackground("#D9D9D9")
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
 
+  dash.getRange("A71").setValue(
+    "Log entries will appear here after daily schedule generation."
+  );
+
+  // --- Column widths ---
+  var widths = [
+    250, 120, 100, 180, 100, 100, 140, 140, 140,
+    250, 140, 100, 150, 180
+  ];
+  widths.forEach(function(w, i) {
+    dash.setColumnWidth(i + 1, w);
+  });
+}
+
+
+/**
+ * Creates a KPI card on the dashboard.
+ *
+ * @param {SpreadsheetApp.Sheet} sheet — The Dashboard sheet
+ * @param {string} titleCell — Top-left cell of the title area (e.g. "A1")
+ * @param {string} valueCell — Top-left cell of the value area (e.g. "A2")
+ * @param {string} title — KPI title text
+ * @param {string} value — Initial value to display
+ * @param {string} bgColor — Background hex color
+ * @param {string} textColor — Text hex color
+ */
+function createKPICard(sheet, titleCell, valueCell, title, value, bgColor, textColor) {
+
+  // Title cell
+  sheet.getRange(titleCell)
+    .setValue(title)
+    .setBackground(bgColor)
+    .setFontColor(textColor)
+    .setFontWeight("bold")
+    .setFontSize(11)
+    .setHorizontalAlignment("center");
+
+  // Value cell
+  sheet.getRange(valueCell)
+    .setValue(value)
+    .setBackground(bgColor)
+    .setFontColor(textColor)
+    .setFontSize(28)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
 }

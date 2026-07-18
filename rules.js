@@ -2,38 +2,32 @@
  * ==========================================================
  * BUSINESS RULES
  * ==========================================================
+ * Break window definitions per shift.
+ * Used by Automation.js to determine if an agent is within
+ * the approved break window.
  */
 
-const BREAK_WINDOWS = {
-
-  Morning: {
-    start: 12,
-    end: 14
-  },
-
-  Afternoon: {
-    start: 15,
-    end: 17
-  },
-
-  Night: {
-    start: 3,
-    end: 6
-  }
-
+/** Break windows by shift (24-hour format, start inclusive, end exclusive). */
+var BREAK_WINDOWS = {
+  Morning:    { start: 12, end: 14 },
+  Afternoon:  { start: 15, end: 17 },
+  Night:      { start: 3,  end: 6  }
 };
 
-function isWithinBreakWindow(shift){
+/**
+ * Checks if the current time is within the approved break
+ * window for the given shift.
+ * @param {string} shift — "Morning", "Afternoon", or "Night"
+ * @returns {boolean}
+ */
+function isWithinBreakWindow(shift) {
 
-  const rule = BREAK_WINDOWS[shift];
+  var rule = BREAK_WINDOWS[shift];
 
-  if(!rule) return false;
+  if (!rule) return false;
 
-  const now = new Date();
+  var now = new Date();
+  var hour = now.getHours();
 
-  const hour = now.getHours();
-
-  return hour >= rule.start &&
-         hour < rule.end;
-
+  return hour >= rule.start && hour < rule.end;
 }

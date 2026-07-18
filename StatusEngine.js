@@ -1,57 +1,65 @@
 /**
  * ==========================================================
- * WFM DASHBOARD
- * StatusEngine.gs
+ * STATUS ENGINE
  * ==========================================================
+ * Runs on a 1-minute time-driven trigger.
+ * Evaluates each agent's scheduled break times and sets
+ * the appropriate status in Daily Operations column O.
+ *
+ * Business logic preserved exactly as original:
+ *   - Before scheduled out  → On Queue
+ *   - During break window   → On Break
+ *   - After scheduled back  → Break Overdue
  */
 
+/**
+ * Recalculates agent statuses based on current time.
+ * Also triggers a dashboard refresh after writing.
+ */
 function updateAgentStatuses() {
 
-  const ss = SpreadsheetApp.getActive();
-  const ops = ss.getSheetByName("Daily Operations");
+  var ss = SpreadsheetApp.getActive();
 
-  if (!ops) {
-    throw new Error("Daily Operations sheet not found.");
-  }
+  var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
 
-  const range = ops.getRange("A6:O500");
-  const data = range.getValues();
+  var range = ops.getRange(
+    OPS_DATA_START_ROW,
+    1,
+    MAX_OPS_ROWS,
+    OPS_COL_COUNT
+  );
 
-  const nowMinutes = toMinutes(new Date());
+  var data = range.getValues();
 
-  data.forEach(row => {
+  var nowMinutes = toMinutes(new Date());
 
-    if (!row[COL.AGENT]) return;
+  for (var i = 0; i < data.length; i++) {
 
-    const scheduledOut = row[COL.SCHEDULED_OUT];
-    const scheduledBack = row[COL.SCHEDULED_BACK];
+    var row = data[i];
+
+    if (!row[COL.AGENT]) continue;
+
+    var scheduledOut = row[COL.SCHEDULED_OUT];
+    var scheduledBack = row[COL.SCHEDULED_BACK];
 
     if (!isValidDate(scheduledOut) || !isValidDate(scheduledBack)) {
       row[COL.STATUS] = "";
-      return;
+      continue;
     }
 
-    const out = toMinutes(scheduledOut);
-    const back = toMinutes(scheduledBack);
+    var out = toMinutes(scheduledOut);
+    var back = toMinutes(scheduledBack);
 
     if (nowMinutes < out) {
-
       row[COL.STATUS] = STATUS.ON_QUEUE;
-
     } else if (nowMinutes < back) {
-
       row[COL.STATUS] = STATUS.ON_BREAK;
-
     } else {
-
       row[COL.STATUS] = STATUS.BREAK_OVERDUE;
-
     }
-
-  });
+  }
 
   range.setValues(data);
 
   refreshDashboard();
-
 }

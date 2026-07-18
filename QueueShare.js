@@ -1,83 +1,103 @@
 /**
  * ==========================================================
- * WFM DASHBOARD
- * QueueShare.gs
+ * QUEUE SHARE
  * ==========================================================
+ * Populates the Queue Share KPI table on the Dashboard
+ * with live agent counts per queue.
  */
 
+/**
+ * Counts agents assigned to each queue and writes
+ * the results to the Dashboard queue share section.
+ */
 function updateQueueShare() {
 
-  const ss = SpreadsheetApp.getActive();
-  const dash = ss.getSheetByName("Dashboard");
-  const ops = ss.getSheetByName("Daily Operations");
+  var ss = SpreadsheetApp.getActive();
 
-  if (!dash || !ops) return;
+  var dash = getSheetOrThrow(ss, SHEETS.DASHBOARD);
+  var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
 
-  dash.getRange(DASHBOARD.QUEUE_SHARE).clearContent();
+  // Clear previous queue share data
+  dash.getRange("J23:N30").clearContent();
 
-  const data = ops.getRange("A6:O500").getValues();
+  // Header
+  dash.getRange("J23:N23").setValues([[
+    "Queue",
+    "Total",
+    "On Queue",
+    "On Break",
+    "Break Overdue"
+  ]]);
 
-  const summary = {};
+  dash.getRange("J23:N23")
+    .setBackground(COLORS.HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
+    .setFontWeight("bold");
 
-  QUEUES.forEach(queue => {
-    summary[queue] = {
-      assigned: 0,
+  // Read agent data
+  var data = ops.getRange(
+    OPS_DATA_START_ROW,
+    1,
+    MAX_OPS_ROWS,
+    OPS_COL_COUNT
+  ).getValues();
+
+  // Count agents per queue per status
+  var counts = {};
+
+  QUEUES.forEach(function(queue) {
+    counts[queue] = {
+      total: 0,
       onQueue: 0,
-      onBreak: 0
+      onBreak: 0,
+      overdue: 0
     };
   });
 
-  data.forEach(row => {
+  for (var i = 0; i < data.length; i++) {
 
-    const agent = String(row[COL.AGENT]).trim();
-    const queue = String(row[COL.QUEUE]).trim();
-    const status = String(row[COL.STATUS]).trim();
+    var row = data[i];
 
-    if (!agent) return;
-    if (!summary[queue]) return;
+    if (!row[COL.AGENT]) continue;
 
-    summary[queue].assigned++;
+    var queue = row[COL.QUEUE];
+    var status = row[COL.STATUS];
+
+    if (!counts[queue]) {
+      counts[queue] = {
+        total: 0,
+        onQueue: 0,
+        onBreak: 0,
+        overdue: 0
+      };
+    }
+
+    counts[queue].total++;
 
     if (status === STATUS.ON_QUEUE) {
-      summary[queue].onQueue++;
+      counts[queue].onQueue++;
+    } else if (status === STATUS.ON_BREAK) {
+      counts[queue].onBreak++;
+    } else if (status === STATUS.BREAK_OVERDUE) {
+      counts[queue].overdue++;
     }
+  }
 
-    if (
-      status === STATUS.ON_BREAK ||
-      status === STATUS.BREAK_OVERDUE
-    ) {
-      summary[queue].onBreak++;
-    }
+  // Write to dashboard
+  var output = [];
 
-  });
-
-  const output = [];
-
-  QUEUES.forEach(queue => {
-
-    const q = summary[queue];
-
-    let coverage = "🟢 OK";
-
-    if (q.onQueue === 0) {
-      coverage = "🔴 CRITICAL";
-    } else if (q.onQueue === 1) {
-      coverage = "🟡 LOW";
-    }
-
+  QUEUES.forEach(function(queue) {
+    var c = counts[queue];
     output.push([
       queue,
-      q.assigned,
-      q.onQueue,
-      q.onBreak,
-      coverage
+      c.total,
+      c.onQueue,
+      c.onBreak,
+      c.overdue
     ]);
-
   });
 
-  dash
-    .getRange(DASHBOARD.QUEUE_SHARE)
-    .offset(0, 0, output.length, 5)
-    .setValues(output);
-
+  if (output.length > 0) {
+    dash.getRange(24, 10, output.length, 5).setValues(output);
+  }
 }

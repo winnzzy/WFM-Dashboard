@@ -1,13 +1,21 @@
 /**
- * CONTACT CENTER TEAM LEAD DASHBOARD
- * Version 1.0
+ * ==========================================================
+ * MAIN — INSTALL
+ * ==========================================================
+ * Master installer for the Team Lead Dashboard.
+ * Run this function once to create all sheets, apply
+ * formatting, validation, formulas, and named ranges.
+ *
+ * Execution order matters — Settings and Roster must be
+ * built before Daily Operations, and Daily Operations
+ * before Dashboard.
  */
 
 /**
- * CONTACT CENTER DASHBOARD
+ * Installs the complete Team Lead Dashboard.
+ * Run from the Apps Script editor or via the custom menu.
  */
-
-function INSTALL(){
+function INSTALL() {
 
   buildSettings();
 
@@ -32,5 +40,4 @@ function INSTALL(){
   updateBreakMonitor();
 
   onOpen();
-
 }

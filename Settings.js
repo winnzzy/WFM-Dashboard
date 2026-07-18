@@ -1,32 +1,52 @@
 /**
- * ===============================================
- * SETTINGS
- * ===============================================
+ * ==========================================================
+ * SETTINGS SHEET
+ * ==========================================================
+ * Creates and configures the Settings sheet with dropdown
+ * source data for Centers, Shifts, Supervisors, and Statuses.
  */
 
+/**
+ * Builds the Settings sheet with all dropdown source values.
+ * This is the single source of truth for validation dropdowns.
+ */
 function buildSettings() {
 
-  const ss = SpreadsheetApp.getActive();
+  var ss = SpreadsheetApp.getActive();
 
-  let sh = ss.getSheetByName("Settings");
+  var sh = ss.getSheetByName(SHEETS.SETTINGS);
 
   if (!sh) {
-    sh = ss.insertSheet("Settings");
+    sh = ss.insertSheet(SHEETS.SETTINGS);
   }
 
   sh.clear();
 
-  // QUEUES
-  sh.getRange("A1").setValue("Queues").setFontWeight("bold");
+  // --- Headers ---
+  var headers = [
+    "Queues",
+    "Shifts",
+    "Status",
+    "Centers",
+    "Supervisors"
+  ];
+
+  sh.getRange(1, 1, 1, headers.length)
+    .setValues([headers])
+    .setBackground(COLORS.HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
+
+  // --- Queues (Column A) ---
   sh.getRange("A2:A5").setValues([
+    ["Call"],
     ["Email"],
     ["Clara"],
-    ["Ebanqo"],
-    ["Call"]
+    ["Ebanqo"]
   ]);
 
-  // SHIFTS
-  sh.getRange("B1").setValue("Shifts").setFontWeight("bold");
+  // --- Shifts (Column B) ---
   sh.getRange("B2:B5").setValues([
     ["Morning"],
     ["Afternoon"],
@@ -34,37 +54,45 @@ function buildSettings() {
     ["OFF"]
   ]);
 
-  // STATUS
-  sh.getRange("C1").setValue("Status").setFontWeight("bold");
+  // --- Status (Column C) ---
   sh.getRange("C2:C11").setValues([
     ["On Queue"],
     ["On Break"],
     ["Break Overdue"],
-    ["Meeting"],
-    ["Coaching"],
-    ["Training"],
-    ["Offline"],
+    ["Absent"],
     ["Logged Out"],
-    ["OFF"],
+    ["Meeting"],
+    ["Training"],
+    ["Coaching"],
+    ["System Issue"],
     ["Leave"]
   ]);
 
-  // CENTERS
-  sh.getRange("D1").setValue("Centers").setFontWeight("bold");
-  sh.getRange("D2:D3").setValues([
+  // --- Centers (Column D) ---
+  sh.getRange("D2:D6").setValues([
+    ["Lagos"],
     ["Abuja"],
-    ["Lagos"]
+    ["PH"],
+    ["Kano"],
+    ["Ibadan"]
   ]);
 
-  // SUPERVISORS
-  sh.getRange("E1").setValue("Supervisors").setFontWeight("bold");
-  sh.getRange("E2:E5").setValues([
-    ["Winner Nnamuah"],
-    ["Grace"],
-    ["Team Lead"],
-    ["Manager"]
+  // --- Supervisors (Column E) ---
+  sh.getRange("E2:E7").setValues([
+    ["Supervisor A"],
+    ["Supervisor B"],
+    ["Supervisor C"],
+    ["Supervisor D"],
+    ["Supervisor E"],
+    ["Supervisor F"]
   ]);
 
-  sh.hideSheet();
+  // --- Formatting ---
+  var widths = [150, 150, 150, 150, 150];
 
+  widths.forEach(function(w, i) {
+    sh.setColumnWidth(i + 1, w);
+  });
+
+  sh.setFrozenRows(1);
 }

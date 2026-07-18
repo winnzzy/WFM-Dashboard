@@ -2,32 +2,34 @@
  * ==========================================================
  * LIVE BREAK MONITOR
  * ==========================================================
+ * Populates the Live Break Monitor section on the Dashboard
+ * with agents currently on break or overdue.
  */
 
+/**
+ * Scans Daily Operations for agents on break/overdue
+ * and writes them to the Dashboard break monitor section.
+ */
 function updateBreakMonitor() {
 
-  const ss = SpreadsheetApp.getActive();
+  var ss = SpreadsheetApp.getActive();
 
-  const dash = ss.getSheetByName("Dashboard");
-  const ops = ss.getSheetByName("Daily Operations");
+  var dash = getSheetOrThrow(ss, SHEETS.DASHBOARD);
+  var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
 
-  if (!dash || !ops) {
-    throw new Error("Dashboard or Daily Operations sheet not found.");
-  }
-
-  // Clear previous monitor
+  // Clear previous monitor data
   dash.getRange("A22:H200").clearContent();
 
-  // Title
+  // Section title
   dash.getRange("A22:H22")
     .merge()
     .setValue("LIVE BREAK MONITOR")
-    .setBackground("#0F4C81")
-    .setFontColor("white")
+    .setBackground(COLORS.HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
 
-  // Headers
+  // Column headers
   dash.getRange("A23:H23").setValues([[
     "Agent",
     "Queue",
@@ -40,23 +42,30 @@ function updateBreakMonitor() {
   ]]);
 
   dash.getRange("A23:H23")
-    .setBackground("#D9EAD3")
+    .setBackground(COLORS.SECTION_HEADER_BG)
     .setFontWeight("bold");
 
-  const data = ops.getRange("A6:R500").getValues();
-  const output = [];
-  const now = new Date();
+  // Read agent data
+  var data = ops.getRange(
+    OPS_DATA_START_ROW,
+    1,
+    MAX_OPS_ROWS,
+    OPS_COL_COUNT
+  ).getValues();
 
-  data.forEach(row => {
+  var output = [];
+  var now = new Date();
 
-    const status = row[COL.STATUS];
+  for (var i = 0; i < data.length; i++) {
 
-    if (
-      status !== STATUS.ON_BREAK &&
-      status !== STATUS.BREAK_OVERDUE
-    ) return;
+    var row = data[i];
+    var status = row[COL.STATUS];
 
-    let minutesLeft = "";
+    if (status !== STATUS.ON_BREAK && status !== STATUS.BREAK_OVERDUE) {
+      continue;
+    }
+
+    var minutesLeft = "";
 
     if (isValidDate(row[COL.SCHEDULED_BACK])) {
       minutesLeft = Math.round(
@@ -74,13 +83,13 @@ function updateBreakMonitor() {
       formatStatus(status),
       row[COL.VARIANCE]
     ]);
+  }
 
-  });
-
-  if (output.length) {
+  if (output.length > 0) {
 
     dash.getRange(24, 1, output.length, 8).setValues(output);
 
+    // Format time columns D & E (Actual Out, Expected Back)
     dash.getRange(24, 4, output.length, 2)
       .setNumberFormat("h:mm AM/PM");
 
@@ -90,5 +99,4 @@ function updateBreakMonitor() {
       .setValue("No agents are currently on break.");
 
   }
-
 }

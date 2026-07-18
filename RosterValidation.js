@@ -1,19 +1,24 @@
 /**
- * ===================================================
+ * ==========================================================
  * ROSTER VALIDATION
- * ===================================================
+ * ==========================================================
+ * Applies data validation dropdowns to the Agent Roster sheet.
+ * Uses shared SHEETS constant from Utilities.js.
  */
 
+/**
+ * Applies all validation rules to Agent Roster columns F–I.
+ */
 function applyRosterValidation() {
 
-  const ss = SpreadsheetApp.getActive();
+  var ss = SpreadsheetApp.getActive();
 
-  const roster = ss.getSheetByName("Agent Roster");
+  var roster = getSheetOrThrow(ss, SHEETS.AGENT_ROSTER);
 
-  // Shift Dropdown
-  const shiftRule = SpreadsheetApp.newDataValidation()
+  // Shift Dropdown (Column F)
+  var shiftRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(
-      ["Morning","Afternoon","Night","OFF"],
+      ["Morning", "Afternoon", "Night", "OFF"],
       true
     )
     .setAllowInvalid(false)
@@ -21,10 +26,10 @@ function applyRosterValidation() {
 
   roster.getRange("F2:F300").setDataValidation(shiftRule);
 
-  // Employment Status
-  const statusRule = SpreadsheetApp.newDataValidation()
+  // Employment Status (Column G)
+  var statusRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(
-      ["Active","Inactive","Leave"],
+      ["Active", "Inactive", "Leave"],
       true
     )
     .setAllowInvalid(false)
@@ -32,10 +37,10 @@ function applyRosterValidation() {
 
   roster.getRange("G2:G300").setDataValidation(statusRule);
 
-  // Queue Preference
-  const queueRule = SpreadsheetApp.newDataValidation()
+  // Queue Preference (Column H)
+  var queueRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(
-      ["Auto","Call","Email","Clara","Ebanqo"],
+      ["Auto", "Call", "Email", "Clara", "Ebanqo"],
       true
     )
     .setAllowInvalid(false)
@@ -43,15 +48,14 @@ function applyRosterValidation() {
 
   roster.getRange("H2:H300").setDataValidation(queueRule);
 
-  // Break Group
-  const breakRule = SpreadsheetApp.newDataValidation()
+  // Break Group (Column I)
+  var breakRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(
-      ["Auto","A","B","C","D"],
+      ["Auto", "A", "B", "C", "D"],
       true
     )
     .setAllowInvalid(false)
     .build();
 
   roster.getRange("I2:I300").setDataValidation(breakRule);
-
 }

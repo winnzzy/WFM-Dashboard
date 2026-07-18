@@ -1,38 +1,58 @@
+/**
+ * ==========================================================
+ * LATE RETURNS
+ * ==========================================================
+ * Populates the Late Returns section on the Dashboard.
+ */
+
+/**
+ * Scans Daily Operations for overdue breaks and writes
+ * them to the Dashboard's Late Returns section.
+ */
 function updateLateReturns() {
 
-  const ss = SpreadsheetApp.getActive();
+  var ss = SpreadsheetApp.getActive();
 
-  const dash = ss.getSheetByName("Dashboard");
-  const ops = ss.getSheetByName("Daily Operations");
+  var dash = getSheetOrThrow(ss, SHEETS.DASHBOARD);
+  var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
 
+  // Clear previous late returns
   dash.getRange("A45:H60").clearContent();
 
-  const data = ops.getRange("A6:O500").getValues();
+  var data = ops.getRange(
+    OPS_DATA_START_ROW,
+    1,
+    MAX_OPS_ROWS,
+    OPS_COL_COUNT
+  ).getValues();
 
-  const output = [];
+  var output = [];
 
-  data.forEach(r => {
+  for (var i = 0; i < data.length; i++) {
 
-    if (r[14] !== "Break Overdue") return;
+    var r = data[i];
+
+    // Skip non-overdue agents
+    if (r[COL.STATUS] !== STATUS.BREAK_OVERDUE) continue;
 
     output.push([
-      r[1],   // Agent
-      r[5],   // Queue
-      r[8],   // Scheduled Back
-      "",
-      "",
-      r[3],   // Supervisor
-      "",
-      "Overdue"
+      r[COL.AGENT],          // Agent
+      r[COL.QUEUE],          // Queue
+      r[COL.SCHEDULED_BACK], // Expected Back
+      "",                    // Actual Back (blank)
+      "",                    // Variance (blank)
+      r[COL.SUPERVISOR],     // Supervisor
+      "",                    // Override
+      "Overdue"              // Remarks
     ]);
-
-  });
-
-  if (output.length) {
-
-    dash.getRange(45,1,output.length,8)
-        .setValues(output);
-
   }
 
+  if (output.length > 0) {
+    dash.getRange(
+      OPS_DATA_START_ROW + 39, // Row 45
+      1,
+      output.length,
+      8
+    ).setValues(output);
+  }
 }
