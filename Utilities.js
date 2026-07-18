@@ -36,6 +36,22 @@ const COL = {
 const OPS_COL_COUNT = 18;
 
 /**
+ * Roster sheet column indexes (0-based for array access).
+ * Maps to columns A–I in the "Agent Roster" sheet.
+ */
+const ROSTER_COL = {
+  NAME: 0,          // A
+  CENTER: 1,        // B
+  SUPERVISOR: 2,    // C
+  /* 3 = D (unused) */
+  /* 4 = E (unused) */
+  SHIFT: 5,         // F
+  AGENT_STATUS: 6,  // G (Active/Inactive)
+  QUEUE: 7,         // H
+  GROUP: 8           // I
+};
+
+/**
  * Queue names — single source of truth.
  */
 const QUEUES = [
@@ -51,7 +67,9 @@ const QUEUES = [
 const STATUS = {
   ON_QUEUE: "On Queue",
   ON_BREAK: "On Break",
-  BREAK_OVERDUE: "Break Overdue"
+  BREAK_OVERDUE: "Break Overdue",
+  ABSENT: "Absent",
+  LOGGED_OUT: "Logged Out"
 };
 
 /**
@@ -141,6 +159,10 @@ function formatStatus(status) {
       return "🟡 On Break";
     case STATUS.BREAK_OVERDUE:
       return "🔴 Break Overdue";
+    case STATUS.ABSENT:
+      return "⚫ Absent";
+    case STATUS.LOGGED_OUT:
+      return "⚪ Logged Out";
     default:
       return status;
   }

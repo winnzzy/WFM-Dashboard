@@ -72,12 +72,10 @@ function applyDropdowns() {
     .setAllowInvalid(false)
     .build();
 
-  // Queue (fixed list — includes "Auto" for Night shift)
+  // Queue (uses QUEUES constant + "Auto" for Night shift)
+  var queueList = QUEUES.concat(["Auto"]);
   var queueRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(
-      ["Call", "Email", "Clara", "Ebanqo", "Auto"],
-      true
-    )
+    .requireValueInList(queueList, true)
     .setAllowInvalid(false)
     .build();
 

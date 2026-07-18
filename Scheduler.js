@@ -5,27 +5,54 @@
  * Generates a daily break schedule by auto-assigning
  * staggered break slots per agent.
  *
- * Business logic preserved exactly as original.
+ * Business logic:
+ *   - Morning shift: 5 fixed break slots (M1–M5)
+ *   - Afternoon shift: 5 fixed break slots (A1–A5)
+ *   - Night shift: 1 fixed break slot (N1)
+ *   - Queue assignment: Round Robin (Night = Auto)
+ *   - Break slots: Max 2 agents per slot
+ *   - No duplicate queue inside same slot (whenever possible)
  */
 
 /**
+ * Break slot definitions per shift.
+ * Times are stored as strings for sheet display.
+ */
+var BREAK_SLOTS = {
+
+  Morning: [
+    { slot: "M1", start: "12:00 PM", end: "1:00 PM" },
+    { slot: "M2", start: "12:15 PM", end: "1:15 PM" },
+    { slot: "M3", start: "12:30 PM", end: "1:30 PM" },
+    { slot: "M4", start: "12:45 PM", end: "1:45 PM" },
+    { slot: "M5", start: "1:00 PM",  end: "2:00 PM" }
+  ],
+
+  Afternoon: [
+    { slot: "A1", start: "3:00 PM", end: "4:00 PM" },
+    { slot: "A2", start: "3:15 PM", end: "4:15 PM" },
+    { slot: "A3", start: "3:30 PM", end: "4:30 PM" },
+    { slot: "A4", start: "3:45 PM", end: "4:45 PM" },
+    { slot: "A5", start: "4:00 PM", end: "5:00 PM" }
+  ],
+
+  Night: [
+    { slot: "N1", start: "3:00 AM", end: "6:00 AM" }
+  ]
+};
+
+
+/**
  * Generates a daily break schedule for all roster agents.
- * Clears existing schedule data before writing.
+ * Writes to both Daily Schedule and Daily Operations sheets.
  */
 function generateDailySchedule() {
 
   var ss = SpreadsheetApp.getActive();
 
   var roster = getSheetOrThrow(ss, SHEETS.AGENT_ROSTER);
+  var scheduleSheet = getSheetOrThrow(ss, SHEETS.DAILY_SCHEDULE);
   var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
-
-  // Clear existing schedule columns B–I in Daily Operations
-  ops.getRange(
-    OPS_DATA_START_ROW,
-    2,
-    MAX_OPS_ROWS,
-    8
-  ).clearContent();
 
   // Read roster data
   var rosterData = roster.getRange(
@@ -35,72 +62,204 @@ function generateDailySchedule() {
     9
   ).getValues();
 
-  // Parse agents from roster
-  var agents = [];
+  // Clear old data
+  scheduleSheet.getRange("A2:J500").clearContent();
+  ops.getRange(
+    OPS_DATA_START_ROW,
+    1,
+    MAX_OPS_ROWS,
+    OPS_COL_COUNT
+  ).clearContent();
 
-  for (var i = 0; i < rosterData.length; i++) {
+  // Round Robin queue pointer
+  var queuePointer = 0;
 
-    var r = rosterData[i];
+  var scheduleRows = [];
+  var operationRows = [];
 
-    if (!r[0]) continue; // skip blank names
+  // Track break slot usage per shift
+  var slotAssignments = {};
 
-    agents.push({
-      name: r[0],
-      center: r[1],
-      supervisor: r[2],
-      shift: r[5],
-      queue: r[7],
-      group: r[8]
+  Object.keys(BREAK_SLOTS).forEach(function(shift) {
+
+    slotAssignments[shift] = {};
+
+    BREAK_SLOTS[shift].forEach(function(slot) {
+      slotAssignments[shift][slot.slot] = [];
     });
-  }
+  });
 
-  // Generate break slots
-  var schedule = [];
-  var agentIndex = 0;
+  // Process every active agent
+  rosterData.forEach(function(row) {
 
-  for (var g = 0; g < agents.length; g++) {
+    var agent = String(row[ROSTER_COL.NAME]).trim();
+    if (!agent) return;
 
-    var agent = agents[g];
+    var center = row[ROSTER_COL.CENTER];
+    var supervisor = row[ROSTER_COL.SUPERVISOR];
+    var shift = String(row[ROSTER_COL.SHIFT]).trim();
+    var agentStatus = String(row[ROSTER_COL.AGENT_STATUS]).trim();
+    var preferredQueue = String(row[ROSTER_COL.QUEUE]).trim();
 
-    // Assign a break slot (staggered by index)
-    var slotHour = 12 + (agentIndex % 3);
-    var slotMinute = (agentIndex * 10) % 60;
+    // Skip inactive and off-duty agents
+    if (agentStatus !== "Active") return;
+    if (shift === "OFF") return;
 
-    var breakSlot = new Date();
-    breakSlot.setHours(slotHour, slotMinute, 0, 0);
+    if (!BREAK_SLOTS[shift]) {
+      throw new Error("Invalid shift: " + shift + " (" + agent + ")");
+    }
 
-    var expectedBack = new Date(breakSlot.getTime() + 60 * 60 * 1000);
+    // =========================================================
+    // QUEUE ASSIGNMENT
+    // =========================================================
+    var queue;
 
-    schedule.push([
-      agent.name,
-      agent.center,
-      agent.supervisor,
-      agent.shift,
-      agent.queue,
-      breakSlot,
-      breakSlot,
-      expectedBack
+    if (shift === "Night") {
+
+      // Night agents remain on Auto
+      queue = "Auto";
+
+    } else if (
+      preferredQueue !== "" &&
+      preferredQueue !== "Auto"
+    ) {
+
+      queue = preferredQueue;
+
+    } else {
+
+      // Round Robin across QUEUES
+      queue = QUEUES[queuePointer];
+      queuePointer++;
+
+      if (queuePointer >= QUEUES.length) {
+        queuePointer = 0;
+      }
+    }
+
+    // =========================================================
+    // BREAK SLOT ASSIGNMENT
+    // =========================================================
+    var selectedSlot = null;
+    var availableSlots = BREAK_SLOTS[shift];
+
+    if (shift === "Night") {
+
+      // All Night agents share the same fixed break
+      selectedSlot = availableSlots[0];
+
+    } else {
+
+      // Pass 1: Max 2 agents AND no duplicate queue
+      for (var i = 0; i < availableSlots.length; i++) {
+
+        var slot = availableSlots[i];
+        var assigned = slotAssignments[shift][slot.slot];
+
+        if (assigned.length >= 2) continue;
+
+        var duplicateQueue =
+          assigned.some(function(a) { return a.queue === queue; });
+
+        if (duplicateQueue) continue;
+
+        selectedSlot = slot;
+
+        assigned.push({
+          agent: agent,
+          queue: queue
+        });
+
+        break;
+      }
+
+      // Pass 2: Relax ONLY the duplicate queue rule
+      if (!selectedSlot) {
+
+        for (var j = 0; j < availableSlots.length; j++) {
+
+          var slot2 = availableSlots[j];
+          var assigned2 = slotAssignments[shift][slot2.slot];
+
+          if (assigned2.length >= 2) continue;
+
+          selectedSlot = slot2;
+
+          assigned2.push({
+            agent: agent,
+            queue: queue
+          });
+
+          break;
+        }
+      }
+
+      if (!selectedSlot) {
+        throw new Error("No break slot available for " + agent);
+      }
+    }
+
+    // =========================================================
+    // BUILD SCHEDULE ROW (Daily Schedule sheet)
+    // =========================================================
+    scheduleRows.push([
+      scheduleRows.length + 1,
+      agent,
+      center,
+      supervisor,
+      shift,
+      queue,
+      selectedSlot.slot,
+      selectedSlot.start,
+      selectedSlot.end,
+      "Scheduled"
     ]);
 
-    agentIndex++;
+    // =========================================================
+    // BUILD OPERATIONS ROW (Daily Operations sheet)
+    // =========================================================
+    operationRows.push([
+      operationRows.length + 1,     // A: Date/Row number
+      agent,                         // B
+      center,                        // C
+      supervisor,                    // D
+      shift,                         // E
+      queue,                         // F
+      selectedSlot.slot,             // G
+      selectedSlot.start,            // H
+      selectedSlot.end,              // I
+      "",                            // J: Login
+      "",                            // K: Actual Out
+      "",                            // L: Actual Back
+      "",                            // M: Break Used
+      "",                            // N: Variance
+      STATUS.ON_QUEUE,               // O: Status
+      "",                            // P: Remarks
+      "",                            // Q: Override
+      ""                             // R: Override Time
+    ]);
+  });
+
+  // =========================================================
+  // WRITE TO SHEETS (BATCH WRITE)
+  // =========================================================
+  if (scheduleRows.length > 0) {
+
+    scheduleSheet
+      .getRange(2, 1, scheduleRows.length, 10)
+      .setValues(scheduleRows);
   }
 
-  // Write schedule to Daily Operations
-  if (schedule.length > 0) {
+  if (operationRows.length > 0) {
 
-    ops.getRange(
-      OPS_DATA_START_ROW,
-      2,
-      schedule.length,
-      8
-    ).setValues(schedule);
-
-    // Format time columns G–I
-    ops.getRange(
-      OPS_DATA_START_ROW,
-      7,
-      schedule.length,
-      3
-    ).setNumberFormat("h:mm AM/PM");
+    ops
+      .getRange(OPS_DATA_START_ROW, 1, operationRows.length, OPS_COL_COUNT)
+      .setValues(operationRows);
   }
+
+  SpreadsheetApp.flush();
+
+  SpreadsheetApp.getUi().alert(
+    scheduleRows.length + " agents scheduled successfully."
+  );
 }
