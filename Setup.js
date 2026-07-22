@@ -37,8 +37,8 @@ function buildDailyOperations() {
     .merge()
     .setValue("Date: " + Utilities.formatDate(
       new Date(),
-      "America/Los_Angeles",
-      "MM-dd-yyyy"
+      "Africa/Lagos",
+      "dd-MM-yyyy"
     ))
     .setBackground(COLORS.SECTION_HEADER_BG)
     .setFontWeight("bold")

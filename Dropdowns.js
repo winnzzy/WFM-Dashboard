@@ -100,6 +100,10 @@ function applyDropdowns() {
     .clearDataValidations()
     .setDataValidation(queueRule);
 
+  // Variance (Column N) must remain free-text (e.g., "On Time", "Late by X mins")
+  sh.getRange("N" + OPS_DATA_START_ROW + ":N" + MAX_OPS_ROWS)
+    .clearDataValidations();
+
   // Status (Column O)
   sh.getRange("O" + OPS_DATA_START_ROW + ":O" + MAX_OPS_ROWS)
     .clearDataValidations()

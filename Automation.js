@@ -58,8 +58,9 @@ function startBreak() {
       .setValue("Outside approved break window");
   }
 
-  // --- Check max 2 agents on break + same-queue conflict ---
+  // --- Check same-queue conflict + Call queue coverage rule ---
   var queue = sh.getRange(row, COL.QUEUE + 1).getValue();
+  var queueKey = normalizeQueueName(queue);
 
   var data = sh.getRange(
     OPS_DATA_START_ROW,
@@ -68,32 +69,44 @@ function startBreak() {
     OPS_COL_COUNT
   ).getValues();
 
-  var agentsOnBreak = 0;
   var sameQueue = false;
+  var otherCallOnQueue = 0;
 
   for (var i = 0; i < data.length; i++) {
 
     var r = data[i];
+    var currentRow = OPS_DATA_START_ROW + i;
 
-    if (r[COL.STATUS] !== STATUS.ON_BREAK) continue;
+    if (!r[COL.AGENT]) continue;
 
-    agentsOnBreak++;
+    var rowQueueKey = normalizeQueueName(r[COL.QUEUE]);
 
-    if (r[COL.QUEUE] === queue) {
+    if (rowQueueKey === queueKey && r[COL.STATUS] === STATUS.ON_BREAK) {
       sameQueue = true;
+    }
+
+    // For Call queue, require at least one OTHER Call agent to remain
+    // actively working on queue while this agent is on break.
+    if (
+      queueKey === "call" &&
+      currentRow !== row &&
+      rowQueueKey === "call" &&
+      r[COL.STATUS] === STATUS.ON_QUEUE
+    ) {
+      otherCallOnQueue++;
     }
   }
 
-  if (agentsOnBreak >= 2) {
+  if (shouldEnforceQueueCoverage(shift) && sameQueue) {
     SpreadsheetApp.getUi().alert(
-      "Maximum of 2 agents are already on break."
+      "Another agent on '" + queue + "' is already on break."
     );
     return;
   }
 
-  if (sameQueue) {
+  if (queueKey === "call" && otherCallOnQueue < 1) {
     SpreadsheetApp.getUi().alert(
-      "Another agent on '" + queue + "' is already on break."
+      "Call queue coverage rule: at least one other Call agent must remain On Queue before this break can start."
     );
     return;
   }
@@ -139,32 +152,6 @@ function returnFromBreak() {
   sh.getRange(row, COL.ACTUAL_BACK + 1)
     .setValue(actualBack)
     .setNumberFormat("h:mm AM/PM");
-
-  var actualOut = sh.getRange(row, COL.ACTUAL_OUT + 1).getValue();
-
-  var scheduledBack = sh.getRange(row, COL.SCHEDULED_BACK + 1).getValue();
-
-  var breakMinutes = Math.round(
-    (actualBack - actualOut) / 60000
-  );
-
-  sh.getRange(row, COL.BREAK_USED + 1)
-    .setValue(breakMinutes);
-
-  var variance = Math.round(
-    (actualBack - scheduledBack) / 60000
-  );
-
-  if (variance < 0) {
-    sh.getRange(row, COL.VARIANCE + 1)
-      .setValue("Early by " + Math.abs(variance) + " mins");
-  } else if (variance === 0) {
-    sh.getRange(row, COL.VARIANCE + 1)
-      .setValue("On Time");
-  } else {
-    sh.getRange(row, COL.VARIANCE + 1)
-      .setValue("Late by " + variance + " mins");
-  }
 
   sh.getRange(row, COL.STATUS + 1)
     .setValue(STATUS.ON_QUEUE);

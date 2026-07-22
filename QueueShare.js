@@ -18,10 +18,10 @@ function updateQueueShare() {
   var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
 
   // Clear previous queue share data
-  dash.getRange("J23:N30").clearContent();
+  dash.getRange("J15:N19").clearContent();
 
   // Header
-  dash.getRange("J23:N23").setValues([[
+  dash.getRange("J14:N14").setValues([[
     "Queue",
     "Total",
     "On Queue",
@@ -29,9 +29,8 @@ function updateQueueShare() {
     "Break Overdue"
   ]]);
 
-  dash.getRange("J23:N23")
-    .setBackground(COLORS.HEADER_BG)
-    .setFontColor(COLORS.HEADER_TEXT)
+  dash.getRange("J14:N14")
+    .setBackground(COLORS.SECTION_HEADER_BG)
     .setFontWeight("bold");
 
   // Read agent data
@@ -98,6 +97,6 @@ function updateQueueShare() {
   });
 
   if (output.length > 0) {
-    dash.getRange(24, 10, output.length, 5).setValues(output);
+    dash.getRange(15, 10, output.length, 5).setValues(output);
   }
 }

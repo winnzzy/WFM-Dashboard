@@ -15,6 +15,15 @@ function buildDashboardSheet() {
 
   var ss = SpreadsheetApp.getActive();
 
+  // Remove unused dedicated sheets (architecture uses single Dashboard sheet)
+  var staleSheets = ["Queue Share", "Break Monitor", "KPI Dashboard"];
+  staleSheets.forEach(function(name) {
+    var stale = ss.getSheetByName(name);
+    if (stale && ss.getSheets().length > 1) {
+      ss.deleteSheet(stale);
+    }
+  });
+
   var dash = ss.getSheetByName(SHEETS.DASHBOARD);
 
   if (!dash) {

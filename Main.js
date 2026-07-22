@@ -23,6 +23,8 @@ function INSTALL() {
 
   buildDailyOperations();
 
+  buildWeeklySchedule();
+
   buildDashboardSheet();
 
   applyDropdowns();
@@ -38,6 +40,12 @@ function INSTALL() {
   createNamedRanges();
 
   updateBreakMonitor();
+
+  updateQueueShare();
+
+  updateLateReturns();
+
+  refreshDashboard();
 
   onOpen();
 }
