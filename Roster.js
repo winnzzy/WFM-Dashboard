@@ -42,16 +42,33 @@ function buildRoster() {
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
 
+  // --- Sample agent names ---
+  var agents = [
+    ["Yimaumuaju Joshua"],
+    ["Shehu Usman Daniya"],
+    ["Mariam Ajikeola Abdulazeez"],
+    ["Comfort Ijeoma Okereke"],
+    ["Thomas Goodeness Dilah"],
+    ["Subuhanallahi Abiodun Adeleye"],
+    ["Emmanuel Okahena Owobu"],
+    ["Zainab Yusuf"],
+    ["Cynthia Nkechi Nwadukwe"],
+    ["Daniel Zongo"],
+    ["Nelson Okeah"],
+    ["Isaac Idemeto"]
+  ];
+  sh.getRange(2, 1, agents.length, 1).setValues(agents);
+
   // --- Default Employment Status (Active) ---
   var statusDefaults = [];
-  for (var i = 0; i < 11; i++) {
+  for (var i = 0; i < agents.length; i++) {
     statusDefaults.push(["Active"]);
   }
   sh.getRange(2, 7, statusDefaults.length, 1).setValues(statusDefaults);
 
   // --- Default Queue Preference (Auto) ---
   var queueDefaults = [];
-  for (var j = 0; j < 11; j++) {
+  for (var j = 0; j < agents.length; j++) {
     queueDefaults.push(["Auto"]);
   }
   sh.getRange(2, 8, queueDefaults.length, 1).setValues(queueDefaults);
@@ -72,6 +89,7 @@ function buildRoster() {
     ["Afternoon"],
     ["Morning"],
     ["OFF"],
+    ["Morning"],
     ["Morning"]
   ];
   sh.getRange(2, 6, shifts.length, 1).setValues(shifts);
@@ -86,20 +104,4 @@ function buildRoster() {
   });
 
   sh.setFrozenRows(1);
-
-  // --- Sample agent names ---
-  var agents = [
-    ["Yimaumuaju Joshua"],
-    ["Shehu Usman Daniya"],
-    ["Nelson Okeah"],
-    ["Mariam Ajikeola Abdulazeez"],
-    ["Comfort Ijeoma Okereke"],
-    ["Thomas Goodeness Dilah"],
-    ["Subuhanallahi Abiodun Adeleye"],
-    ["Emmanuel Okahena Owobu"],
-    ["Isaac Idemeto"],
-    ["Zainab Yusuf"],
-    ["Cynthia Nkechi Nwadukwe"]
-  ];
-  sh.getRange(2, 1, agents.length, 1).setValues(agents);
 }
