@@ -19,8 +19,13 @@ function buildRoster() {
     sh = ss.insertSheet(SHEETS.AGENT_ROSTER);
   }
 
-  sh.clearDataValidations();
+  var fullSheetRange = sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns());
+  fullSheetRange.clearDataValidations();
+  SpreadsheetApp.flush();
+
   sh.clear();
+  fullSheetRange.clearDataValidations();
+  SpreadsheetApp.flush();
 
   // --- Headers ---
   var headers = [
