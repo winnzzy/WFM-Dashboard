@@ -91,13 +91,13 @@ function buildRoster() {
   var agents = [
     ["Yimaumuaju Joshua"],
     ["Shehu Usman Daniya"],
-    ["Muhammad Nazir"],
+    ["Nelson Okeah"],
     ["Mariam Ajikeola Abdulazeez"],
     ["Comfort Ijeoma Okereke"],
     ["Thomas Goodeness Dilah"],
     ["Subuhanallahi Abiodun Adeleye"],
     ["Emmanuel Okahena Owobu"],
-    ["Firdausi Suleiman Sanni"],
+    ["Isaac Idemeto"],
     ["Zainab Yusuf"],
     ["Cynthia Nkechi Nwadukwe"]
   ];
