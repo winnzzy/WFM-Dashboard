@@ -19,6 +19,7 @@ function buildRoster() {
     sh = ss.insertSheet(SHEETS.AGENT_ROSTER);
   }
 
+  sh.clearDataValidations();
   sh.clear();
 
   // --- Headers ---

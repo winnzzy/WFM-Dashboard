@@ -24,7 +24,9 @@ function applyRosterValidation() {
     .setAllowInvalid(false)
     .build();
 
-  roster.getRange("F2:F300").setDataValidation(shiftRule);
+  roster.getRange("F2:F300")
+    .clearDataValidations()
+    .setDataValidation(shiftRule);
 
   // Employment Status (Column G)
   var statusRule = SpreadsheetApp.newDataValidation()
@@ -35,18 +37,22 @@ function applyRosterValidation() {
     .setAllowInvalid(false)
     .build();
 
-  roster.getRange("G2:G300").setDataValidation(statusRule);
+  roster.getRange("G2:G300")
+    .clearDataValidations()
+    .setDataValidation(statusRule);
 
   // Queue Preference (Column H)
   var queueRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(
-      ["Auto", "Call", "Email", "Clara", "Ebanqo"],
+      ["Auto", "Call", "Email", "Clara", "Ebanqo", "Calls/Clara/Emails", "Calls/Clara"],
       true
     )
     .setAllowInvalid(false)
     .build();
 
-  roster.getRange("H2:H300").setDataValidation(queueRule);
+  roster.getRange("H2:H300")
+    .clearDataValidations()
+    .setDataValidation(queueRule);
 
   // Break Group (Column I)
   var breakRule = SpreadsheetApp.newDataValidation()
@@ -57,5 +63,7 @@ function applyRosterValidation() {
     .setAllowInvalid(false)
     .build();
 
-  roster.getRange("I2:I300").setDataValidation(breakRule);
+  roster.getRange("I2:I300")
+    .clearDataValidations()
+    .setDataValidation(breakRule);
 }
