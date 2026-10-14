@@ -85,7 +85,27 @@ function refreshDashboard() {
   dash.getRange("H11").setValue(compliance);
 
   // --- Break Overdue section ---
-  dash.getRange("J22:N60").clearContent();
+  dash.getRange("J22:N64").clearContent();
+  dash.getRange("J24:N24")
+    .breakApart()
+    .merge()
+    .setValue("BREAK OVERDUE")
+    .setBackground(COLORS.LATE_HEADER_BG)
+    .setFontColor(COLORS.HEADER_TEXT)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
+
+  dash.getRange("J25:N25").setValues([[
+    "Agent",
+    "Queue",
+    "Expected Back",
+    "Minutes Overdue",
+    "Status"
+  ]]);
+
+  dash.getRange("J25:N25")
+    .setBackground(COLORS.LATE_HEADER_SUB)
+    .setFontWeight("bold");
 
   var overdueOutput = [];
 
@@ -114,8 +134,8 @@ function refreshDashboard() {
   }
 
   if (overdueOutput.length > 0) {
-    dash.getRange(22, 10, overdueOutput.length, 5).setValues(overdueOutput);
-    dash.getRange(22, 12, overdueOutput.length, 1)
+    dash.getRange(26, 10, overdueOutput.length, 5).setValues(overdueOutput);
+    dash.getRange(26, 12, overdueOutput.length, 1)
       .setNumberFormat("h:mm AM/PM");
   }
 

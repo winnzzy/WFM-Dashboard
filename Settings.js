@@ -39,12 +39,11 @@ function buildSettings() {
     .setHorizontalAlignment("center");
 
   // --- Queues (Column A) ---
-  sh.getRange("A2:A5").setValues([
-    ["Call"],
-    ["Email"],
-    ["Clara"],
-    ["Ebanqo"]
-  ]);
+  sh.getRange(2, 1, QUEUES.length, 1).setValues(
+    QUEUES.map(function(queue) {
+      return [queue];
+    })
+  );
 
   // --- Shifts (Column B) ---
   sh.getRange("B2:B5").setValues([

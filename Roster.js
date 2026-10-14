@@ -61,7 +61,9 @@ function buildRoster() {
     ["Cynthia Nkechi Nwadukwe"],
     ["Daniel Zongo"],
     ["Nelson Okeah"],
-    ["Isaac Idemeto"]
+    ["Isaac Idemeto"],
+    ["Michael Asapuo"],
+    ["Franklin Anyanwu"]
   ];
   sh.getRange(2, 1, agents.length, 1).setValues(agents);
 
@@ -95,6 +97,8 @@ function buildRoster() {
     ["Afternoon"],
     ["Morning"],
     ["OFF"],
+    ["Morning"],
+    ["Morning"],
     ["Morning"],
     ["Morning"]
   ];

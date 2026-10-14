@@ -44,7 +44,7 @@ function applyRosterValidation() {
   // Queue Preference (Column H)
   var queueRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(
-      ["Auto", "Call", "Email", "Clara", "Ebanqo", "Calls/Clara/Emails", "Calls/Clara"],
+      ["Auto"].concat(QUEUES),
       true
     )
     .setAllowInvalid(false)

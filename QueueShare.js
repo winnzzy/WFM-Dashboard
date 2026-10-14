@@ -16,9 +16,10 @@ function updateQueueShare() {
 
   var dash = getSheetOrThrow(ss, SHEETS.DASHBOARD);
   var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
+  var queueShareRows = Math.max(QUEUES.length + 2, 1);
 
   // Clear previous queue share data
-  dash.getRange("J15:N19").clearContent();
+  dash.getRange(15, 10, queueShareRows, 5).breakApart().clearContent();
 
   // Header
   dash.getRange("J14:N14").setValues([[
@@ -99,4 +100,77 @@ function updateQueueShare() {
   if (output.length > 0) {
     dash.getRange(15, 10, output.length, 5).setValues(output);
   }
+}
+
+/**
+ * Exports the current Queue Share table to a new sheet.
+ * Keeps all existing dashboard logic unchanged.
+ */
+function exportQueueShareToSheet() {
+
+  var ss = SpreadsheetApp.getActive();
+  var scheduleSheet = getSheetOrThrow(ss, SHEETS.DAILY_SCHEDULE);
+
+  var lastRow = Math.max(scheduleSheet.getLastRow(), 1);
+  var lastCol = Math.max(scheduleSheet.getLastColumn(), 1);
+  var values = scheduleSheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+
+  var hasDataRows = false;
+  for (var i = 2; i < values.length; i++) {
+    if (String(values[i][1] || "").trim() !== "") {
+      hasDataRows = true;
+      break;
+    }
+  }
+
+  if (!hasDataRows) {
+    SpreadsheetApp.getUi().alert(
+      "Export Queue Share",
+      "No Daily Schedule data available to export.",
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    return;
+  }
+
+  var exportSheet = ss.insertSheet(getUniqueQueueShareExportSheetName_(ss));
+
+  exportSheet.getRange(1, 1).setValue("Daily Schedule Export").setFontWeight("bold");
+  exportSheet.getRange(2, 1).setValue("Generated At").setFontWeight("bold");
+  exportSheet.getRange(2, 2)
+    .setValue(new Date())
+    .setNumberFormat("dd-MMM-yyyy h:mm AM/PM");
+
+  exportSheet.getRange(4, 1, values.length, values[0].length).setValues(values);
+  exportSheet.getRange(4, 1, 1, values[0].length)
+    .setBackground(COLORS.SECTION_HEADER_BG)
+    .setFontWeight("bold");
+
+  exportSheet.setFrozenRows(4);
+  exportSheet.autoResizeColumns(1, values[0].length);
+
+  SpreadsheetApp.getUi().alert(
+    "Export Queue Share",
+    "Daily Schedule exported to sheet: " + exportSheet.getName(),
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+/**
+ * Builds a unique export sheet name.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @returns {string}
+ */
+function getUniqueQueueShareExportSheetName_(ss) {
+  var tz = ss.getSpreadsheetTimeZone() || "Africa/Lagos";
+  var stamp = Utilities.formatDate(new Date(), tz, "yyyyMMdd_HHmm");
+  var base = "Daily Schedule Export " + stamp;
+  var name = base;
+  var suffix = 2;
+
+  while (ss.getSheetByName(name)) {
+    name = base + " (" + suffix + ")";
+    suffix++;
+  }
+
+  return name;
 }

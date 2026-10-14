@@ -58,8 +58,43 @@ const QUEUES = [
   "Call",
   "Email",
   "Clara",
-  "Ebanqo"
+  "Ebanqo",
+  "Calls/Clara/Emails",
+  "Calls/Clara",
+  "Training"
 ];
+
+/**
+ * Special Morning break slots for the Call queue only.
+ */
+const MORNING_CALL_BREAK_SLOTS = [
+  { slot: "M1", start: "11:00 AM", end: "11:30 AM" },
+  { slot: "M2", start: "11:30 AM", end: "12:00 PM" },
+  { slot: "M3", start: "3:00 PM", end: "3:30 PM" },
+  { slot: "M4", start: "3:30 PM", end: "4:00 PM" }
+];
+
+/**
+ * Returns the break slots to use for a specific shift and queue.
+ * Only Morning + Call uses the special 4-slot pattern.
+ *
+ * @param {string} shift
+ * @param {string} queue
+ * @returns {Array<Object>}
+ */
+function getBreakSlotsForShiftAndQueue(shift, queue) {
+  var queueKey = normalizeQueueName(queue);
+  var isCallFamilyQueue =
+    queueKey === "call" ||
+    queueKey === "calls/clara/emails" ||
+    queueKey === "calls/clara";
+
+  if (shift === "Morning" && isCallFamilyQueue) {
+    return MORNING_CALL_BREAK_SLOTS;
+  }
+
+  return BREAK_SLOTS[shift] || [];
+}
 
 /**
  * Normalizes and validates the roster queue for scheduling.
@@ -251,7 +286,7 @@ const STATUS = {
  */
 const DASHBOARD = {
   BREAK_MONITOR: "A24:H200",
-  QUEUE_SHARE: "J14:N19",
+  QUEUE_SHARE: "J14:N22",
   LATE_RETURNS: "A45:H70"
 };
 

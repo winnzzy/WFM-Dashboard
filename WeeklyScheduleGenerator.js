@@ -339,7 +339,7 @@ function generateFromWeeklySchedule(dayOffset) {
     // =========================================================
     // BREAK SLOT ASSIGNMENT (same rules as Scheduler.js)
     // =========================================================
-    var availableSlots = BREAK_SLOTS[shift];
+    var availableSlots = getBreakSlotsForShiftAndQueue(shift, agent.preferredQueue);
     var assignment = findBreakAssignment({
       agent: agent.name,
       shift: shift,
@@ -440,6 +440,15 @@ function generateFromWeeklySchedule(dayOffset) {
     scheduleSheet
       .getRange(2, 1, scheduleRows.length, 10)
       .setValues(scheduleRows);
+
+    // Display guard: Scheduled Out (H) / Scheduled Back (I) on the
+    // Daily Schedule sheet must always render as times, never as dates.
+    // These cells can carry stale date number-formats from earlier edits,
+    // which makes valid break times display as bare dates (e.g. 10/14/2026).
+    // Display only - slot assignment rules are untouched.
+    scheduleSheet
+      .getRange(2, 8, scheduleRows.length, 2)
+      .setNumberFormat("h:mm AM/PM");
   }
 
   if (operationRows.length > 0) {

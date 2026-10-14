@@ -65,9 +65,14 @@ function generateDailyReport() {
  * Placeholder — to be implemented with specific export logic.
  */
 function exportQueueShare() {
+  if (typeof exportQueueShareToSheet === "function") {
+    exportQueueShareToSheet();
+    return;
+  }
+
   SpreadsheetApp.getUi().alert(
     "Export Queue Share",
-    "This feature is not yet implemented.",
+    "Export function is not available. Check QueueShare.js.",
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }

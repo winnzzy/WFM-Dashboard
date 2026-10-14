@@ -207,7 +207,7 @@ function buildDashboardSheet() {
     .setFontWeight("bold");
 
   // --- Break Overdue Section ---
-  dash.getRange("J20:N20")
+  dash.getRange("J24:N24")
     .merge()
     .setValue("BREAK OVERDUE")
     .setBackground(COLORS.LATE_HEADER_BG)
@@ -223,14 +223,14 @@ function buildDashboardSheet() {
     "Status"
   ];
 
-  dash.getRange("J21:N21").setValues([overdueHeaders]);
+  dash.getRange("J25:N25").setValues([overdueHeaders]);
 
-  dash.getRange("J21:N21")
+  dash.getRange("J25:N25")
     .setBackground(COLORS.LATE_HEADER_SUB)
     .setFontWeight("bold");
 
   // --- Supervisor Overrides Section ---
-  dash.getRange("J37:N37")
+  dash.getRange("J41:N41")
     .merge()
     .setValue("SUPERVISOR OVERRIDES")
     .setBackground(COLORS.OVERRIDE_HEADER_BG)
@@ -246,9 +246,9 @@ function buildDashboardSheet() {
     "Supervisor"
   ];
 
-  dash.getRange("J38:N38").setValues([overrideHeaders]);
+  dash.getRange("J42:N42").setValues([overrideHeaders]);
 
-  dash.getRange("J38:N38")
+  dash.getRange("J42:N42")
     .setBackground(COLORS.OVERRIDE_HEADER_SUB)
     .setFontWeight("bold");
 
