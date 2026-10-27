@@ -46,6 +46,86 @@ var FCMB_SCHEDULE_RECIPIENTS = [
 var FCMB_PREVIEW_SHEET = "FCMB Schedule Email - PREVIEW";
 
 /**
+ * Centre for this schedule, supplied by Winner 2026-10-27:
+ * Abuja for every agent. It is shown once in the header,
+ * not as a per-agent column — a Centre column repeating
+ * the same value only made the table wide for no reason.
+ * (The Daily Schedule Centre column itself is still blank
+ * in the sheet; filling Agent Roster Centre with Abuja
+ * would carry it through generation, but the FCMB email
+ * does not wait for that.)
+ */
+var FCMB_CENTRE = "Abuja";
+
+/**
+ * Signature for script-sent emails — taken from Gmail
+ * itself, never typed in by hand (Winner, 2026-10-27).
+ *
+ * Google only adds a Gmail signature in the Gmail
+ * web/app composer; MailApp sends from Apps Script do
+ * NOT get it automatically, which is why it looked
+ * "removed". The fix is to read the signature Winner
+ * already has set in Gmail (Gmail API, sendAs settings)
+ * and append that exact HTML at send time. Needs the
+ * gmail.settings.basic scope in appsscript.json.
+ *
+ * If the fetch fails, or no signature is set in Gmail,
+ * the email still sends — with just "Warm regards," and
+ * no invented name, title or phone number. A signature
+ * failure must never fail the schedule email.
+ */
+var gmailSignatureCache_ = null;
+
+function getGmailSignature_() {
+  if (gmailSignatureCache_) return gmailSignatureCache_;
+  var empty = { html: "", plain: "" };
+  try {
+    var email = Session.getEffectiveUser().getEmail();
+    if (!email) return empty;
+    var resp = UrlFetchApp.fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs/" +
+        encodeURIComponent(email),
+      {
+        method: "get",
+        headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true
+      }
+    );
+    if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) return empty;
+    var data = JSON.parse(resp.getContentText());
+    var html = String(data.signature || "");
+    if (!html.trim()) return empty;
+    var plain = html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    gmailSignatureCache_ = { html: html, plain: plain };
+    return gmailSignatureCache_;
+  } catch (e) {
+    return empty;
+  }
+}
+
+function fcmbSignatureHtml() {
+  var sig = getGmailSignature_();
+  return "<p style=\"margin:20px 0 0;font-size:15px;line-height:1.5;\">Warm regards,</p>" +
+    (sig.html ? "<div style=\"font-size:15px;line-height:1.5;\">" + sig.html + "</div>" : "") +
+    "<p style=\"color:#6b7280;font-size:12px;line-height:1.5;\">Sent via the Team Lead Dashboard (CDFC Daily Operations).</p>";
+}
+
+function fcmbSignaturePlain() {
+  var sig = getGmailSignature_();
+  return "Warm regards,\n" +
+    (sig.plain ? sig.plain + "\n\n" : "") +
+    "Sent via the Team Lead Dashboard (CDFC Daily Operations).";
+}
+
+/**
  * The schedule date for the email: the Daily Operations
  * date when one is set, otherwise today. Same rule as
  * the agent schedule emails.
@@ -87,6 +167,7 @@ function buildFcmbSchedulePlainBody(dateLabel, rows) {
     "Hello,",
     "",
     "Please find below the daily schedule for " + formatDateLong(dateLabel) + ":",
+    "Centre: " + FCMB_CENTRE,
     ""
   ];
   rows.forEach(function(r) {
@@ -97,7 +178,7 @@ function buildFcmbSchedulePlainBody(dateLabel, rows) {
   lines.push("");
   lines.push("Thank you.");
   lines.push("");
-  lines.push("— Team Lead Dashboard (CDFC Daily Operations)");
+  lines.push(fcmbSignaturePlain());
   return lines.join("\n");
 }
 
@@ -110,7 +191,6 @@ function buildFcmbScheduleHtml(dateLabel, rows) {
   var bodyRows = rows.map(function(r) {
     return "<tr>" +
       "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.agent) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.centre) + "</td>" +
       "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.shift) + "</td>" +
       "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.queue) + "</td>" +
       "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.slot) + "</td>" +
@@ -121,7 +201,7 @@ function buildFcmbScheduleHtml(dateLabel, rows) {
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:640px;margin:0 auto;\">" +
     "<div style=\"background:#0b5563;color:#ffffff;padding:20px 24px;border-radius:12px 12px 0 0;\">" +
     "<div style=\"font-size:22px;font-weight:bold;\">CDFC Daily Schedule</div>" +
-    "<div style=\"margin-top:4px;font-size:14px;opacity:0.9;\">" + escapeHtml(formatDateLong(dateLabel)) + "</div>" +
+    "<div style=\"margin-top:4px;font-size:14px;opacity:0.9;\">" + escapeHtml(formatDateLong(dateLabel)) + " &middot; Centre: " + escapeHtml(FCMB_CENTRE) + "</div>" +
     "</div>" +
     "<div style=\"border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px;\">" +
     "<p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;\">Hello,</p>" +
@@ -130,7 +210,6 @@ function buildFcmbScheduleHtml(dateLabel, rows) {
     "<table style=\"width:100%;border-collapse:collapse;font-size:14px;\">" +
     "<tr>" +
     "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Agent</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Centre</th>" +
     "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Shift</th>" +
     "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Queue</th>" +
     "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Break slot</th>" +
@@ -138,7 +217,7 @@ function buildFcmbScheduleHtml(dateLabel, rows) {
     "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Back</th>" +
     "</tr>" + bodyRows + "</table>" +
     "<p style=\"margin:20px 0 0;font-size:15px;line-height:1.5;\">Thank you.</p>" +
-    "<p style=\"color:#6b7280;font-size:13px;line-height:1.5;\">Sent from the Team Lead Dashboard (CDFC Daily Operations).</p>" +
+    fcmbSignatureHtml() +
     "</div></div>";
 }
 
@@ -169,17 +248,26 @@ function previewFcmbScheduleEmailMenu() {
   sh.getRange(3, 2).setValue(fcmbScheduleSubject(dateLabel));
   sh.getRange(4, 1).setValue("Schedule date").setFontWeight("bold");
   sh.getRange(4, 2).setValue(dateLabel);
-  sh.getRange(6, 1, 1, 7).setValues([["Agent", "Centre", "Shift", "Queue", "Break slot", "Out", "Back"]])
+  sh.getRange(5, 1).setValue("Centre").setFontWeight("bold");
+  sh.getRange(5, 2).setValue(FCMB_CENTRE);
+  sh.getRange(6, 1, 1, 6).setValues([["Agent", "Shift", "Queue", "Break slot", "Out", "Back"]])
     .setBackground(COLORS.HEADER_BG)
     .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold");
   var values = rows.map(function(r) {
-    return [r.agent, r.centre, r.shift, r.queue, r.slot,
+    return [r.agent, r.shift, r.queue, r.slot,
       formatBreakTime(r.out), formatBreakTime(r.back)];
   });
-  sh.getRange(7, 1, values.length, 7).setValues(values);
+  sh.getRange(7, 1, values.length, 6).setValues(values);
   sh.setFrozenRows(6);
-  sh.autoResizeColumns(1, 7);
+  // Fixed widths, not auto-resize: the table stays tight
+  // like the break emails instead of stretching a column.
+  sh.setColumnWidth(1, 240);
+  sh.setColumnWidth(2, 110);
+  sh.setColumnWidth(3, 110);
+  sh.setColumnWidth(4, 110);
+  sh.setColumnWidth(5, 90);
+  sh.setColumnWidth(6, 90);
   ui.alert("Preview Schedule Email to FCMB",
     "PREVIEW ONLY — nothing has been sent.\n\n" +
     "To: " + fcmbRecipientList() + "\n" +
@@ -213,11 +301,11 @@ function sendPreviewedFcmbScheduleEmailMenu() {
     return;
   }
   var dateLabel = String(sh.getRange(4, 2).getValue() || fcmbScheduleDateLabel());
-  var data = sh.getRange(7, 1, Math.max(sh.getLastRow() - 6, 0), 7).getValues();
+  var data = sh.getRange(7, 1, Math.max(sh.getLastRow() - 6, 0), 6).getValues();
   var rows = [];
   data.forEach(function(d) {
     if (String(d[0] || "").trim() !== "") {
-      rows.push({ agent: d[0], centre: d[1], shift: d[2], queue: d[3], slot: d[4], out: d[5], back: d[6] });
+      rows.push({ agent: d[0], shift: d[1], queue: d[2], slot: d[3], out: d[4], back: d[5] });
     }
   });
   if (rows.length === 0) {
@@ -255,5 +343,52 @@ function sendPreviewedFcmbScheduleEmailMenu() {
     "Sent to " + fcmbRecipientList() + "\n\n" +
     "Subject: " + fcmbScheduleSubject(dateLabel) + "\n" +
     "Agents: " + rows.length,
+    ui.ButtonSet.OK);
+}
+
+/**
+ * TEST ONLY — not in the Team Lead menu, on purpose.
+ * Winner asked (2026-10-27) to test the FCMB schedule
+ * email to his own nnamuahn@gmail.com after the push,
+ * before anything goes to FCMB.
+ *
+ * Run from Extensions -> Apps Script, function dropdown:
+ * sendTestFcmbScheduleEmail. It sends the current Daily
+ * Schedule, in the exact FCMB format (HTML table, Centre
+ * Abuja header, Gmail signature fetched at send time),
+ * to nnamuahn@gmail.com ONLY. It does not touch the
+ * preview sheet, does not mark any preview SENT, and
+ * does not email Keziah, Oladapo or Sarah. Delete this
+ * function once the test has passed, if Winner wants
+ * it gone.
+ */
+function sendTestFcmbScheduleEmail() {
+  var ui = SpreadsheetApp.getUi();
+  var rows = readDailyScheduleRows();
+  if (rows.length === 0) {
+    ui.alert("Test Schedule Email",
+      "No Daily Schedule found. Generate today's schedule first, then run this test again.",
+      ui.ButtonSet.OK);
+    return;
+  }
+  var dateLabel = fcmbScheduleDateLabel();
+  try {
+    MailApp.sendEmail({
+      to: "nnamuahn@gmail.com",
+      subject: "[TEST] " + fcmbScheduleSubject(dateLabel),
+      body: buildFcmbSchedulePlainBody(dateLabel, rows),
+      htmlBody: buildFcmbScheduleHtml(dateLabel, rows)
+    });
+  } catch (e) {
+    ui.alert("Test Schedule Email",
+      "Test send failed — " + e.message,
+      ui.ButtonSet.OK);
+    return;
+  }
+  ui.alert("Test Schedule Email",
+    "Test sent to nnamuahn@gmail.com only.\n\n" +
+    "Subject: [TEST] " + fcmbScheduleSubject(dateLabel) + "\n" +
+    "Agents: " + rows.length + "\n\n" +
+    "Nothing was sent to FCMB. Check the nnamuahn@gmail.com inbox for the table, Centre Abuja header and your Gmail signature.",
     ui.ButtonSet.OK);
 }
