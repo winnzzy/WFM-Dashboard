@@ -34,12 +34,24 @@ function onOpen() {
 
     .addSeparator()
 
+    .addItem("👥 Sync Roster → Weekly Schedule", "syncRosterToWeeklyMenu")
+    .addItem("🧹 Remove Weekly Rows Not on Roster", "pruneWeeklyFromRosterMenu")
+
+    .addSeparator()
+
+    .addItem("📧 Email Today's Break Schedules", "sendTodayScheduleEmailsMenu")
+    .addItem("🔔 Send Break Reminders (next 15 min)", "sendBreakRemindersMenu")
+    .addItem("💬 Add WhatsApp Links to Daily Schedule", "addWhatsAppLinksToDailySchedule")
+
+    .addSeparator()
+
     .addSubMenu(
       SpreadsheetApp.getUi().createMenu("🔧 System")
         .addItem("🩺 Health Check", "systemHealthCheck")
         .addItem("🔐 Verify Permissions", "verifyPermissions")
         .addItem("🔧 Rebuild Dashboard", "refreshDashboard")
         .addItem("⚡ Reinstall Triggers", "reinstallTriggers")
+        .addItem("🔔 Install Break Reminder Trigger", "installNotificationTriggers")
         .addItem("📊 System Report", "showSystemReport")
     )
 

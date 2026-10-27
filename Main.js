@@ -33,6 +33,11 @@ function INSTALL() {
 
   applyRosterValidation();
 
+  // Notification Log sheet (created on first send if missing).
+  if (typeof ensureNotificationLogSheet === "function") {
+    ensureNotificationLogSheet();
+  }
+
   applyFormatting();
 
   applyFormulas();

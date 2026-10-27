@@ -133,6 +133,13 @@ function generateFromWeeklySchedule(dayOffset) {
 
   var startTime = new Date().getTime();
 
+  // Sheet-driven roster: agents added in Agent Roster appear in
+  // Weekly Schedule first (blank day cells, for the lead to fill),
+  // so "add an agent" never needs a code change.
+  if (typeof ensureWeeklyHasRosterAgents === "function") {
+    ensureWeeklyHasRosterAgents();
+  }
+
   syncRosterFromWeekly(dayOffset);
 
   var ss = SpreadsheetApp.getActive();
@@ -208,7 +215,9 @@ function generateFromWeeklySchedule(dayOffset) {
       center: rosterData[r][ROSTER_COL.CENTER],
       supervisor: rosterData[r][ROSTER_COL.SUPERVISOR],
       queue: String(rosterData[r][ROSTER_COL.QUEUE]).trim(),
-      status: String(rosterData[r][ROSTER_COL.AGENT_STATUS]).trim()
+      status: String(rosterData[r][ROSTER_COL.AGENT_STATUS]).trim(),
+      phone: String(rosterData[r][ROSTER_COL.PHONE] || "").trim(),
+      email: String(rosterData[r][ROSTER_COL.EMAIL] || "").trim()
     };
   }
 
@@ -273,16 +282,14 @@ function generateFromWeeklySchedule(dayOffset) {
   }
 
   // =========================================================
-  // ERROR HANDLING — Missing agents
+  // REMOVED AGENTS - skip with a warning, do not crash.
+  // Agents in Weekly Schedule but NOT in Agent Roster were
+  // removed (or never added) in the sheet, so they are skipped
+  // here and named in the final alert. To keep them, add them
+  // back to Agent Roster; to silence the warning, run Team Lead
+  // -> Remove Weekly Rows Not on Roster.
   // =========================================================
-  if (missingAgents.length > 0) {
-    throw new Error(
-      "The following agents exist in the Weekly Schedule but NOT " +
-      "in the Agent Roster:\n\n" +
-      missingAgents.join("\n") +
-      "\n\nPlease add them to the Agent Roster before generating."
-    );
-  }
+  var skippedAgents = missingAgents.slice();
 
   // Prioritize fixed roster queues before Auto so flexible agents
   // do not block fixed-queue assignments.
@@ -457,6 +464,12 @@ function generateFromWeeklySchedule(dayOffset) {
       .setValues(operationRows);
   }
 
+  // One-tap WhatsApp links (column K) from Roster phone numbers.
+  // Manual by design until a WhatsApp Business API is configured.
+  if (typeof addWhatsAppLinksToDailySchedule === "function") {
+    try { addWhatsAppLinksToDailySchedule(); } catch (e) {}
+  }
+
   // Regeneration clears data rows, so reapply calculated formulas.
   applyFormulas();
 
@@ -507,7 +520,11 @@ function generateFromWeeklySchedule(dayOffset) {
     "  Afternoon: " + afternoonCount + "\n" +
     "  Night: " + nightCount + "\n" +
     "OFF: " + offCount + "\n" +
-    "Leave: " + leaveCount + "\n\n" +
-    "Duration: " + durationSec + " seconds"
+    "Leave: " + leaveCount +
+    (skippedAgents.length > 0
+      ? "\n\nSkipped (in Weekly, not on Roster):\n\u2022 " + skippedAgents.join("\n\u2022 ")
+      : "") + "\n\n" +
+    "Duration: " + durationSec + " seconds" +
+    "\n\nNext: Team Lead -> Email Today's Break Schedules to notify agents."
   );
 }

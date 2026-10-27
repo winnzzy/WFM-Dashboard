@@ -37,18 +37,22 @@ const OPS_COL_COUNT = 18;
 
 /**
  * Roster sheet column indexes (0-based for array access).
- * Maps to columns A–I in the "Agent Roster" sheet.
+ * Maps to columns A–J in the "Agent Roster" sheet.
+ * Phone (D) and Email (E) are now first-class: they drive
+ * break/schedule notifications in Notifications.js. They were
+ * previously present as columns but ignored by the code.
  */
 const ROSTER_COL = {
   NAME: 0,          // A
   CENTER: 1,        // B
   SUPERVISOR: 2,    // C
-  /* 3 = D (unused) */
-  /* 4 = E (unused) */
+  PHONE: 3,         // D — WhatsApp number
+  EMAIL: 4,         // E — notification email
   SHIFT: 5,         // F
   AGENT_STATUS: 6,  // G (Active/Inactive)
   QUEUE: 7,         // H
-  GROUP: 8           // I
+  GROUP: 8,         // I
+  REMARKS: 9        // J
 };
 
 /**
@@ -314,7 +318,8 @@ const SHEETS = {
   AGENT_ROSTER: "Agent Roster",
   DAILY_SCHEDULE: "Daily Schedule",
   WEEKLY_SCHEDULE: "Weekly Schedule",
-  SETTINGS: "Settings"
+  SETTINGS: "Settings",
+  NOTIFICATION_LOG: "Notification Log"
 };
 
 /**
