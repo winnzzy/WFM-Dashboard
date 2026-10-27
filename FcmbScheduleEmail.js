@@ -78,6 +78,35 @@ var gmailSignatureCache_ = null;
 
 var gmailSignatureStatus_ = "";
 
+/**
+ * Fallback signature, set by Winner himself in the
+ * Apps Script editor: Project Settings -> Script
+ * Properties -> FCMB_SIGNATURE_HTML, pasted from his
+ * Gmail signature. Never put a signature in code, in
+ * chat, or in the sheet. Used only when the Gmail API
+ * fetch fails (e.g. HTTP 403) or Gmail has no signature
+ * set for this account.
+ */
+function getFallbackSignature_() {
+  try {
+    var html = String(PropertiesService.getScriptProperties()
+      .getProperty("FCMB_SIGNATURE_HTML") || "").trim();
+    if (!html) return { html: "", plain: "" };
+    var plain = html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return { html: html, plain: plain };
+  } catch (e) {
+    return { html: "", plain: "" };
+  }
+}
+
 function getGmailSignature_() {
   if (gmailSignatureCache_) return gmailSignatureCache_;
   var empty = { html: "", plain: "" };
@@ -101,8 +130,25 @@ function getGmailSignature_() {
       }
     );
     if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
+      // 403 here means the token does not carry the
+      // gmail.settings.basic scope yet — most often an old
+      // authorisation from before that scope was added.
+      // Fall back to a signature Winner himself pastes
+      // into Script Properties (see below); never invent
+      // one, and never fail the email over a signature.
+      var fallback = getFallbackSignature_();
+      if (fallback.html) {
+        gmailSignatureStatus_ = "Gmail API fetch failed: HTTP " + resp.getResponseCode() +
+          " — using the signature from Script Properties instead.";
+        gmailSignatureCache_ = fallback;
+        return fallback;
+      }
       gmailSignatureStatus_ = "Gmail settings fetch failed: HTTP " + resp.getResponseCode() +
-        " (check the gmail.settings.basic scope was allowed on re-authorisation).";
+        ". That usually means the old authorisation is still in use: revoke the script at " +
+        "myaccount.google.com/permissions, run again and Allow all scopes. " +
+        "If your Workspace admin blocks this scope, paste your Gmail signature HTML into " +
+        "Script Properties as FCMB_SIGNATURE_HTML instead (Project Settings in the editor) " +
+        "and retest — that copy is yours, not typed into code.";
       return empty;
     }
     var data = JSON.parse(resp.getContentText());
@@ -118,6 +164,13 @@ function getGmailSignature_() {
     }
     var html = String(chosen.signature || "");
     if (!html.trim()) {
+      var fb = getFallbackSignature_();
+      if (fb.html) {
+        gmailSignatureStatus_ = "No signature set in Gmail for " + chosen.sendAsEmail +
+          " — using the signature from Script Properties instead.";
+        gmailSignatureCache_ = fb;
+        return fb;
+      }
       gmailSignatureStatus_ = "No signature is set in Gmail for " + chosen.sendAsEmail +
         " — set one in Gmail Settings → Signature, then retest. Nothing was invented.";
       return empty;
