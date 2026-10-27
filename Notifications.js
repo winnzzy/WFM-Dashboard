@@ -88,8 +88,109 @@ function getWhatsAppChatLink(phone, message) {
 }
 
 /**
- * The break message itself, shared by email and WhatsApp
- * so agents get identical wording on both channels.
+ * Small helpers for the agent-facing emails: a human date
+ * ("Wednesday, 28 October 2026" instead of "2026-10-28"),
+ * a first name for a personal greeting, and HTML escaping
+ * so a name or queue can never break the email layout.
+ */
+function formatDateLong(dateLabel) {
+  try {
+    var parts = String(dateLabel).split("-");
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return Utilities.formatDate(d, "Africa/Lagos", "EEEE, d MMMM yyyy");
+  } catch (e) {
+    return String(dateLabel);
+  }
+}
+
+function firstNameOf(agentName) {
+  var parts = String(agentName || "").trim().split(/\s+/);
+  return parts[0] || String(agentName || "");
+}
+
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function breakMinutes(outTime, backTime) {
+  if (!isValidDate(outTime) || !isValidDate(backTime)) return 0;
+  return Math.round((backTime.getTime() - outTime.getTime()) / 60000);
+}
+
+/**
+ * The full-day schedule email, as coloured HTML with inline
+ * styles (Gmail-safe: no external CSS, no gradients, no
+ * scripts). Plain-text body is still sent alongside it as
+ * the fallback, so it reads fine in any client. Tone:
+ * warm and a little fun, but the times are the serious part.
+ */
+function buildScheduleEmailHtml(agentName, shift, queue, slot, outTime, backTime, dateLabel) {
+  var longDate = formatDateLong(dateLabel);
+  var out = formatBreakTime(outTime);
+  var back = formatBreakTime(backTime);
+  var mins = breakMinutes(outTime, backTime);
+  var durationLine = mins > 0
+    ? "<div style=\"margin-top:4px;color:#475569;font-size:14px;\">" + mins + " minutes to recharge</div>"
+    : "";
+  return "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:560px;margin:0 auto;\">" +
+    "<div style=\"background:#0b5563;color:#ffffff;padding:20px 24px;border-radius:12px 12px 0 0;\">" +
+    "<div style=\"font-size:22px;font-weight:bold;\">\u2615 Your break is booked in</div>" +
+    "<div style=\"margin-top:4px;font-size:14px;opacity:0.9;\">CDFC Daily Operations &middot; " + escapeHtml(longDate) + "</div>" +
+    "</div>" +
+    "<div style=\"border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px;\">" +
+    "<p style=\"margin:0 0 12px;font-size:16px;\">Hi " + escapeHtml(firstNameOf(agentName)) + ",</p>" +
+    "<p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;\">Here is your break for " + escapeHtml(longDate) +
+    " &mdash; no guessing, no checking the sheet. Just switch off, recharge, and be back on queue on time.</p>" +
+    "<div style=\"background:#eaf6f5;border-left:4px solid #f59e0b;padding:16px;border-radius:8px;text-align:center;\">" +
+    "<div style=\"font-size:12px;letter-spacing:1px;font-weight:bold;color:#0b5563;\">YOUR BREAK WINDOW</div>" +
+    "<div style=\"font-size:28px;font-weight:bold;color:#0b5563;margin-top:6px;\">" + escapeHtml(out) + " &ndash; " + escapeHtml(back) + "</div>" +
+    durationLine +
+    "</div>" +
+    "<table style=\"width:100%;border-collapse:collapse;margin-top:20px;font-size:15px;\">" +
+    "<tr><td style=\"padding:8px 0;color:#6b7280;\">Shift</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;\">" + escapeHtml(shift) + "</td></tr>" +
+    "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Queue</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(queue) + "</td></tr>" +
+    "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Break slot</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(slot) + "</td></tr>" +
+    "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Back on queue by</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(back) + "</td></tr>" +
+    "</table>" +
+    "<p style=\"background:#fff7ed;border:1px solid #fde68a;padding:12px 14px;border-radius:8px;font-size:14px;line-height:1.5;\">" +
+    "\u23f0 Please wrap up before " + escapeHtml(out) + " and be back on queue by " + escapeHtml(back) +
+    ". Late returns show up on the daily report, so give yourself a couple of minutes to get back and settled.</p>" +
+    "<p style=\"color:#6b7280;font-size:13px;line-height:1.5;\">Questions? Check with your team lead. Sent from the Team Lead Dashboard.</p>" +
+    "</div></div>";
+}
+
+/**
+ * The 15-minute reminder, same look as the schedule email
+ * but shorter — the agent only needs the time and the nudge.
+ */
+function buildReminderEmailHtml(agentName, shift, queue, outTime, backTime) {
+  var out = formatBreakTime(outTime);
+  var back = formatBreakTime(backTime);
+  return "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:560px;margin:0 auto;\">" +
+    "<div style=\"background:#0b5563;color:#ffffff;padding:20px 24px;border-radius:12px 12px 0 0;\">" +
+    "<div style=\"font-size:22px;font-weight:bold;\">\u2615 Break coming up</div>" +
+    "<div style=\"margin-top:4px;font-size:14px;opacity:0.9;\">CDFC Daily Operations</div>" +
+    "</div>" +
+    "<div style=\"border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px;\">" +
+    "<p style=\"margin:0 0 12px;font-size:16px;\">Hi " + escapeHtml(firstNameOf(agentName)) + ",</p>" +
+    "<p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;\">Heads up &mdash; your break starts in about 15 minutes. Time to wrap up what you are on.</p>" +
+    "<div style=\"background:#eaf6f5;border-left:4px solid #f59e0b;padding:16px;border-radius:8px;text-align:center;\">" +
+    "<div style=\"font-size:12px;letter-spacing:1px;font-weight:bold;color:#0b5563;\">YOUR BREAK</div>" +
+    "<div style=\"font-size:28px;font-weight:bold;color:#0b5563;margin-top:6px;\">" + escapeHtml(out) + " &ndash; " + escapeHtml(back) + "</div>" +
+    "<div style=\"margin-top:4px;color:#475569;font-size:14px;\">" + escapeHtml(shift) + " shift &middot; " + escapeHtml(queue) + "</div>" +
+    "</div>" +
+    "<p style=\"color:#6b7280;font-size:13px;line-height:1.5;margin-top:20px;\">Be back on queue by " + escapeHtml(back) + ". Sent from the Team Lead Dashboard.</p>" +
+    "</div></div>";
+}
+
+/**
+ * The break message itself, shared by email plain-text
+ * fallback and WhatsApp so agents get identical facts on
+ * both channels. The email HTML above is the pretty version.
  */
 function buildBreakMessage(agentName, shift, queue, slot, outTime, backTime, dateLabel) {
   return "Hi " + agentName + ",\n\n" +
@@ -258,9 +359,10 @@ function sendScheduleEmailsForToday() {
     try {
       MailApp.sendEmail({
         to: contact.email,
-        subject: "Your break schedule for " + dateLabel + " — " + r.shift + " shift",
+        subject: "☕ Your break schedule for " + formatDateLong(dateLabel) + " — " + r.shift + " shift",
         body: buildBreakMessage(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel) +
-          "\n\n— Team Lead Dashboard"
+          "\n\n— Team Lead Dashboard",
+        htmlBody: buildScheduleEmailHtml(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel)
       });
       markSent(key);
       sent++;
@@ -395,11 +497,12 @@ function sendBreakReminders() {
       try {
         MailApp.sendEmail({
           to: contact.email,
-          subject: "Break in " + minutes + " minutes — " + formatBreakTime(r.out),
+          subject: "☕ Break in " + minutes + " minutes — " + formatBreakTime(r.out),
           body: "Hi " + r.agent + ",\n\nYour break starts in about " + minutes +
             " minutes (" + formatBreakTime(r.out) + " – " + formatBreakTime(r.back) +
             ", " + r.shift + " shift, " + r.queue + ").\n\nPlease wrap up and be ready to go on break on time." +
-            "\n\n— Team Lead Dashboard"
+            "\n\n— Team Lead Dashboard",
+          htmlBody: buildReminderEmailHtml(r.agent, r.shift, r.queue, r.out, r.back)
         });
         sentThis = true;
       } catch (e) {
