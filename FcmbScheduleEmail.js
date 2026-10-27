@@ -76,25 +76,57 @@ var FCMB_CENTRE = "Abuja";
  */
 var gmailSignatureCache_ = null;
 
+var gmailSignatureStatus_ = "";
+
 function getGmailSignature_() {
   if (gmailSignatureCache_) return gmailSignatureCache_;
   var empty = { html: "", plain: "" };
   try {
     var email = Session.getEffectiveUser().getEmail();
-    if (!email) return empty;
+    if (!email) {
+      gmailSignatureStatus_ = "No effective user email.";
+      return empty;
+    }
+    // List sendAs addresses and pick the primary one, instead
+    // of guessing a single sendAs URL — that single-URL call
+    // is the likeliest reason the first test came back with
+    // no signature even though one may be set.
     var resp = UrlFetchApp.fetch(
-      "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs/" +
-        encodeURIComponent(email),
+      "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs",
       {
         method: "get",
         headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
         muteHttpExceptions: true
       }
     );
-    if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) return empty;
+    if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
+      gmailSignatureStatus_ = "Gmail settings fetch failed: HTTP " + resp.getResponseCode() +
+        " (check the gmail.settings.basic scope was allowed on re-authorisation).";
+      return empty;
+    }
     var data = JSON.parse(resp.getContentText());
-    var html = String(data.signature || "");
-    if (!html.trim()) return empty;
+    var list = data.sendAs || [];
+    var chosen = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].isPrimary) { chosen = list[i]; break; }
+    }
+    if (!chosen) {
+      for (var j = 0; j < list.length; j++) {
+        if (String(list[j].sendAsEmail || "") === email) { chosen = list[j]; break; }
+      }
+    }
+    if (!chosen && list.length > 0) chosen = list[0];
+    if (!chosen) {
+      gmailSignatureStatus_ = "No sendAs address found for " + email + ".";
+      return empty;
+    }
+    var html = String(chosen.signature || "");
+    if (!html.trim()) {
+      gmailSignatureStatus_ = "No signature is set in Gmail for " + chosen.sendAsEmail +
+        " — set one in Gmail Settings → Signature, then retest. Nothing was invented.";
+      return empty;
+    }
+    gmailSignatureStatus_ = "Signature found for " + chosen.sendAsEmail + " (" + html.length + " characters).";
     var plain = html
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/p>/gi, "\n")
@@ -123,6 +155,23 @@ function fcmbSignaturePlain() {
   return "Warm regards,\n" +
     (sig.plain ? sig.plain + "\n\n" : "") +
     "Sent via the Team Lead Dashboard (CDFC Daily Operations).";
+}
+
+/**
+ * Diagnostic only, editor-run like the test send: reports
+ * whether a Gmail signature was found, for which address,
+ * or exactly why not — so a missing signature is diagnosed
+ * instead of guessed at. Sends nothing.
+ */
+function checkGmailSignature() {
+  gmailSignatureCache_ = null;
+  gmailSignatureStatus_ = "";
+  var sig = getGmailSignature_();
+  SpreadsheetApp.getUi().alert("Gmail Signature Check",
+    "Account: " + Session.getEffectiveUser().getEmail() + "\n\n" +
+    gmailSignatureStatus_ + "\n\n" +
+    (sig.html ? "Signature preview (plain text):\n" + sig.plain : "No signature will be appended to the next send."),
+    SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
@@ -188,14 +237,20 @@ function buildFcmbSchedulePlainBody(dateLabel, rows) {
  * Inline styles only (Gmail-safe).
  */
 function buildFcmbScheduleHtml(dateLabel, rows) {
-  var bodyRows = rows.map(function(r) {
-    return "<tr>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.agent) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.shift) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.queue) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;\">" + escapeHtml(r.slot) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;font-weight:bold;\">" + escapeHtml(formatBreakTime(r.out)) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #f3f4f6;font-weight:bold;\">" + escapeHtml(formatBreakTime(r.back)) + "</td>" +
+  // Fixed table layout + nowrap times: Gmail was wrapping
+  // "11:00 AM" across two lines and stretching the Agent
+  // column, which is what made the test email look ugly.
+  // Column widths are fixed, times never wrap, every
+  // second row is shaded so rows stay easy to follow.
+  var bodyRows = rows.map(function(r, i) {
+    var bg = (i % 2 === 1) ? "background:#f9fafb;" : "";
+    return "<tr style=\"" + bg + "\">" +
+      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;line-height:1.4;\">" + escapeHtml(r.agent) + "</td>" +
+      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;white-space:nowrap;\">" + escapeHtml(r.shift) + "</td>" +
+      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;white-space:nowrap;\">" + escapeHtml(r.queue) + "</td>" +
+      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;white-space:nowrap;\">" + escapeHtml(r.slot) + "</td>" +
+      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;font-weight:bold;white-space:nowrap;\">" + escapeHtml(formatBreakTime(r.out)) + "</td>" +
+      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;font-weight:bold;white-space:nowrap;\">" + escapeHtml(formatBreakTime(r.back)) + "</td>" +
       "</tr>";
   }).join("");
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:640px;margin:0 auto;\">" +
@@ -207,14 +262,15 @@ function buildFcmbScheduleHtml(dateLabel, rows) {
     "<p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;\">Hello,</p>" +
     "<p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;\">Please find below the daily schedule for " +
     escapeHtml(formatDateLong(dateLabel)) + ".</p>" +
-    "<table style=\"width:100%;border-collapse:collapse;font-size:14px;\">" +
-    "<tr>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Agent</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Shift</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Queue</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Break slot</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Out</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;\">Back</th>" +
+    "<table style=\"width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px;\">" +
+    "<colgroup><col style=\"width:28%\"><col style=\"width:15%\"><col style=\"width:15%\"><col style=\"width:12%\"><col style=\"width:15%\"><col style=\"width:15%\"></colgroup>" +
+    "<tr style=\"background:#eaf6f5;\">" +
+    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Agent</th>" +
+    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Shift</th>" +
+    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Queue</th>" +
+    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Break slot</th>" +
+    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Out</th>" +
+    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Back</th>" +
     "</tr>" + bodyRows + "</table>" +
     "<p style=\"margin:20px 0 0;font-size:15px;line-height:1.5;\">Thank you.</p>" +
     fcmbSignatureHtml() +
