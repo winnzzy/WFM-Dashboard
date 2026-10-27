@@ -41,7 +41,15 @@ function onOpen() {
 
     .addItem("📧 Email Today's Break Schedules", "sendTodayScheduleEmailsMenu")
     .addItem("🔔 Send Break Reminders (next 15 min)", "sendBreakRemindersMenu")
+    .addItem("⏰ Check Overdue Breaks Now", "checkOverdueBreakAlertsMenu")
     .addItem("💬 Add WhatsApp Links to Daily Schedule", "addWhatsAppLinksToDailySchedule")
+    .addItem("✅ Check WhatsApp Auto-Send Setup", "checkWhatsAppSetupMenu")
+
+    .addSeparator()
+
+    .addItem("📆 Set Selected Agent's Whole Week…", "setSelectedAgentWeek")
+    .addItem("📆 Set Selected Agent's Week from Roster", "setSelectedAgentWeekFromRoster")
+    .addItem("🧹 Clear Selected Agent's Week", "clearSelectedAgentWeek")
 
     .addSeparator()
 
@@ -51,7 +59,7 @@ function onOpen() {
         .addItem("🔐 Verify Permissions", "verifyPermissions")
         .addItem("🔧 Rebuild Dashboard", "refreshDashboard")
         .addItem("⚡ Reinstall Triggers", "reinstallTriggers")
-        .addItem("🔔 Install Break Reminder Trigger", "installNotificationTriggers")
+        .addItem("🔔 Install Notification Triggers", "installNotificationTriggers")
         .addItem("📊 System Report", "showSystemReport")
     )
 
@@ -60,21 +68,9 @@ function onOpen() {
 
 
 /**
- * Generates a summary report of today's operations.
- * Placeholder — to be implemented with specific reporting logic.
- */
-function generateDailyReport() {
-  SpreadsheetApp.getUi().alert(
-    "Daily Report",
-    "This feature is not yet implemented.",
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-}
-
-
-/**
  * Exports the current Queue Share data to a new sheet or file.
- * Placeholder — to be implemented with specific export logic.
+ * Note: generateDailyReport() now lives in DailyReport.js
+ * (real report from Daily Operations), not here.
  */
 function exportQueueShare() {
   if (typeof exportQueueShareToSheet === "function") {

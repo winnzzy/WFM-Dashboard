@@ -140,6 +140,24 @@ function generateFromWeeklySchedule(dayOffset) {
     ensureWeeklyHasRosterAgents();
   }
 
+  // Roster check BEFORE any schedule is written: surface duplicates,
+  // missing shifts/queues and bad emails now, not at send time.
+  // A warning here does not block generation unless the lead cancels.
+  var rosterProblems = [];
+  if (typeof validateRoster === "function") {
+    rosterProblems = validateRoster();
+  }
+  if (rosterProblems.length > 0) {
+    try {
+      var _resp = SpreadsheetApp.getUi().alert(
+        "Roster Issues Found",
+        "Fix these in Agent Roster when you can — generation will continue:\n\n\u2022 " + rosterProblems.join("\n\u2022 ") + "\n\nGenerate anyway?",
+        SpreadsheetApp.getUi().ButtonSet.YES_NO
+      );
+      if (_resp !== SpreadsheetApp.getUi().Button.YES) return;
+    } catch (e) {}
+  }
+
   syncRosterFromWeekly(dayOffset);
 
   var ss = SpreadsheetApp.getActive();
@@ -521,6 +539,9 @@ function generateFromWeeklySchedule(dayOffset) {
     "  Night: " + nightCount + "\n" +
     "OFF: " + offCount + "\n" +
     "Leave: " + leaveCount +
+    (rosterProblems.length > 0
+      ? "\n\nRoster issues (generation continued):\n\u2022 " + rosterProblems.join("\n\u2022 ")
+      : "") +
     (skippedAgents.length > 0
       ? "\n\nSkipped (in Weekly, not on Roster):\n\u2022 " + skippedAgents.join("\n\u2022 ")
       : "") + "\n\n" +

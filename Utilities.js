@@ -319,7 +319,8 @@ const SHEETS = {
   DAILY_SCHEDULE: "Daily Schedule",
   WEEKLY_SCHEDULE: "Weekly Schedule",
   SETTINGS: "Settings",
-  NOTIFICATION_LOG: "Notification Log"
+  NOTIFICATION_LOG: "Notification Log",
+  DAILY_REPORT: "Daily Report"
 };
 
 /**

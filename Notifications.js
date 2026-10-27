@@ -241,6 +241,7 @@ function sendScheduleEmailsForToday() {
   var sent = 0;
   var skipped = [];
   var errors = [];
+  var whatsappSent = 0;
 
   rows.forEach(function(r) {
     var contact = contacts[r.agent] || {};
@@ -264,13 +265,30 @@ function sendScheduleEmailsForToday() {
       markSent(key);
       sent++;
       logNotification(r.agent, "Email", "Schedule", r.shift + " / " + r.slot + " " + formatBreakTime(r.out) + "–" + formatBreakTime(r.back), "Sent");
+      // Automatic WhatsApp, only when the Business API is configured.
+      // A missing setup never fails the email that just went out.
+      var waKey = "schedule-whatsapp:" + dateLabel + ":" + r.agent;
+      if (!hasAlreadySent(waKey)) {
+        var wa = sendWhatsAppViaApi(contact.phone, [
+          r.agent,
+          formatBreakTime(r.out) + " – " + formatBreakTime(r.back),
+          r.shift
+        ]);
+        if (wa.sent) {
+          markSent(waKey);
+          whatsappSent++;
+          logNotification(r.agent, "WhatsApp", "Schedule", r.shift + " / " + r.slot, "Sent via Business API");
+        } else if (contact.phone) {
+          logNotification(r.agent, "WhatsApp", "Schedule", r.shift + " / " + r.slot, "Not auto-sent — " + wa.reason);
+        }
+      }
     } catch (e) {
       errors.push(r.agent + ": " + e.message);
       logNotification(r.agent, "Email", "Schedule", r.shift + " / " + r.slot, "Failed — " + e.message);
     }
   });
 
-  return { sent: sent, skipped: skipped, errors: errors, dateLabel: dateLabel };
+  return { sent: sent, skipped: skipped, errors: errors, dateLabel: dateLabel, whatsappSent: whatsappSent };
 }
 
 function sendTodayScheduleEmailsMenu() {
@@ -283,6 +301,7 @@ function sendTodayScheduleEmailsMenu() {
   }
   var msg = "Schedule emails for " + result.dateLabel + ":\n\n" +
     "Sent: " + result.sent + "\n" +
+    "Automatic WhatsApp sends: " + (result.whatsappSent || 0) + "\n" +
     "Skipped: " + result.skipped.length +
     (result.skipped.length ? "\n• " + result.skipped.join("\n• ") : "") + "\n" +
     "Errors: " + result.errors.length +
@@ -427,16 +446,20 @@ function sendBreakRemindersMenu() {
 }
 
 /**
- * Installs the hands-free 15-minute break-reminder trigger.
- * Replaces any previous break-reminder trigger; leaves the
- * existing status-update triggers alone.
+ * Installs the hands-free 15-minute notification triggers:
+ * break reminders AND overdue-break alerts. Replaces any
+ * previous triggers for those two functions only; leaves
+ * the existing status-update triggers alone. Note: System
+ * -> Reinstall Triggers deletes ALL triggers, so re-run
+ * this installer after a system trigger reinstall.
  */
 function installNotificationTriggers() {
   var ui = SpreadsheetApp.getUi();
   var existing = ScriptApp.getProjectTriggers();
   var removed = 0;
   for (var i = 0; i < existing.length; i++) {
-    if (existing[i].getHandlerFunction() === "sendBreakReminders") {
+    var fn = existing[i].getHandlerFunction();
+    if (fn === "sendBreakReminders" || fn === "checkOverdueBreakAlerts") {
       ScriptApp.deleteTrigger(existing[i]);
       removed++;
     }
@@ -445,14 +468,143 @@ function installNotificationTriggers() {
     .timeBased()
     .everyMinutes(15)
     .create();
+  ScriptApp.newTrigger("checkOverdueBreakAlerts")
+    .timeBased()
+    .everyMinutes(15)
+    .create();
 
   ui.alert(
-    "Break Reminder Trigger Installed",
-    "sendBreakReminders now runs every 15 minutes.\n" +
-    "Previous break-reminder triggers removed: " + removed + ".\n\n" +
+    "Notification Triggers Installed",
+    "sendBreakReminders and checkOverdueBreakAlerts now run every 15 minutes.\n" +
+    "Previous notification triggers removed: " + removed + ".\n\n" +
     "Note: the full-day schedule email is still sent manually from " +
     "Team Lead → Email Today's Break Schedules, right after you generate " +
     "the schedule — so you control exactly when agents get the day's plan.",
     ui.ButtonSet.OK
   );
+}
+
+/**
+ * ==========================================================
+ * OVERDUE BREAK ALERTS
+ * ==========================================================
+ * The 1-minute status engine already flags Break Overdue,
+ * but it tells nobody. This check tells the team lead.
+ *
+ * A break counts as overdue here only when it is real:
+ * Actual Out is filled, Actual Back is blank, and now is
+ * more than OVERDUE_ALERT_MINUTES past Scheduled Back.
+ * That Actual Back check matters: the status engine alone
+ * would flag everyone past their back time, returned or not.
+ *
+ * Alerts go to the person running the sheet (the team lead,
+ * via Session.getEffectiveUser), once per agent per day per
+ * break, and are logged to Notification Log. Run it from
+ * the menu, or let the 15-minute notification trigger run it.
+ */
+
+/**
+ * Minutes past Scheduled Back before an overdue alert fires.
+ */
+var OVERDUE_ALERT_MINUTES = 10;
+
+function checkOverdueBreakAlerts() {
+  var ss = SpreadsheetApp.getActive();
+  var ops = getSheetOrThrow(ss, SHEETS.DAILY_OPS);
+  var data = ops.getRange(
+    OPS_DATA_START_ROW,
+    1,
+    MAX_OPS_ROWS,
+    OPS_COL_COUNT
+  ).getValues();
+
+  var leadEmail = "";
+  try { leadEmail = Session.getEffectiveUser().getEmail(); } catch (e) {}
+  var now = new Date();
+  var alerted = [];
+  var skippedNoLead = false;
+
+  data.forEach(function(r) {
+    if (!r[COL.AGENT]) return;
+    if (!isValidDate(r[COL.ACTUAL_OUT])) return;
+    if (isValidDate(r[COL.ACTUAL_BACK])) return;
+    if (!isValidDate(r[COL.SCHEDULED_BACK])) return;
+
+    var minutesOverdue = Math.round((now.getTime() - r[COL.SCHEDULED_BACK].getTime()) / 60000);
+    if (minutesOverdue < OVERDUE_ALERT_MINUTES) return;
+
+    var dateLabel = formatDateKey(r[COL.SCHEDULED_BACK]);
+    var key = "overdue-alert:" + dateLabel + ":" + r[COL.AGENT] + ":" + r[COL.BREAK_SLOT];
+    if (hasAlreadySent(key)) return;
+
+    if (!leadEmail) {
+      skippedNoLead = true;
+      return;
+    }
+
+    try {
+      MailApp.sendEmail({
+        to: leadEmail,
+        subject: "Overdue break: " + r[COL.AGENT] + " (" + minutesOverdue + " min)",
+        body: "Hi,\n\n" + r[COL.AGENT] + " (" + r[COL.SHIFT] + " shift, " + r[COL.QUEUE] + ", slot " + r[COL.BREAK_SLOT] + ") " +
+          "was due back at " + formatBreakTime(r[COL.SCHEDULED_BACK]) +
+          " and is now " + minutesOverdue + " minutes overdue (went out " + formatBreakTime(r[COL.ACTUAL_OUT]) + ").\n\n" +
+          "— Team Lead Dashboard"
+      });
+      markSent(key);
+      alerted.push(r[COL.AGENT] + " (" + minutesOverdue + " min)");
+      logNotification(r[COL.AGENT], "Email", "Overdue alert", r[COL.BREAK_SLOT] + " " + minutesOverdue + " min overdue", "Sent to team lead");
+    } catch (e) {
+      logNotification(r[COL.AGENT], "Email", "Overdue alert", r[COL.BREAK_SLOT], "Failed — " + e.message);
+    }
+  });
+
+  return { alerted: alerted, skippedNoLead: skippedNoLead };
+}
+
+function checkOverdueBreakAlertsMenu() {
+  var result = checkOverdueBreakAlerts();
+  var msg = result.alerted.length > 0
+    ? "Overdue alerts sent to the team lead:\n• " + result.alerted.join("\n• ")
+    : "No overdue breaks needing an alert right now (overdue = back time + " + OVERDUE_ALERT_MINUTES + " min, still out).";
+  if (result.skippedNoLead) {
+    msg += "\n\nNote: no team-lead email address was available, so alerts were not sent.";
+  }
+  SpreadsheetApp.getUi().alert("Overdue Breaks", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * WhatsApp setup check — reports what is present and what
+ * is missing, without ever showing a token value. Run from
+ * Team Lead -> Check WhatsApp Auto-Send Setup.
+ *
+ * To enable automatic WhatsApp: in the Apps Script editor,
+ * Project Settings -> Script Properties, set:
+ *   WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID,
+ *   WHATSAPP_TEMPLATE_NAME
+ * The template must be an approved WhatsApp template with
+ * body parameters in this order: {{1}} agent name,
+ * {{2}} break time range, {{3}} shift. Until all three
+ * are set, sends fall back to the manual column K links.
+ */
+function checkWhatsAppSetupMenu() {
+  var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty("WHATSAPP_TOKEN");
+  var phoneId = props.getProperty("WHATSAPP_PHONE_NUMBER_ID");
+  var template = props.getProperty("WHATSAPP_TEMPLATE_NAME");
+
+  var lines = [
+    "WhatsApp automatic sends: " + ((token && phoneId && template) ? "READY" : "NOT CONFIGURED"),
+    "",
+    "WHATSAPP_TOKEN: " + (token ? "set (value not shown)" : "MISSING"),
+    "WHATSAPP_PHONE_NUMBER_ID: " + (phoneId ? "set (value not shown)" : "MISSING"),
+    "WHATSAPP_TEMPLATE_NAME: " + (template ? template : "MISSING"),
+    "",
+    "Template body parameters must be, in order:",
+    "{{1}} agent name, {{2}} break time range, {{3}} shift.",
+    "",
+    "Until all three are set, use the Daily Schedule",
+    "column K 'Send on WhatsApp' links — no API needed."
+  ];
+  SpreadsheetApp.getUi().alert("WhatsApp Setup", lines.join("\n"), SpreadsheetApp.getUi().ButtonSet.OK);
 }
