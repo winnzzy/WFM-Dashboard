@@ -82,11 +82,12 @@ function getGmailSignature_() {
   if (gmailSignatureCache_) return gmailSignatureCache_;
   var empty = { html: "", plain: "" };
   try {
-    var email = Session.getEffectiveUser().getEmail();
-    if (!email) {
-      gmailSignatureStatus_ = "No effective user email.";
-      return empty;
-    }
+    // Deliberately NO Session.getEffectiveUser() here: that
+    // call needs the userinfo.email scope, and when it is
+    // missing it throws and kills the whole diagnostic
+    // (2026-10-27: checkGmailSignature crashed exactly
+    // that way). The /users/me list endpoint needs no
+    // email address at all — pick the primary sendAs.
     // List sendAs addresses and pick the primary one, instead
     // of guessing a single sendAs URL — that single-URL call
     // is the likeliest reason the first test came back with
@@ -110,14 +111,9 @@ function getGmailSignature_() {
     for (var i = 0; i < list.length; i++) {
       if (list[i].isPrimary) { chosen = list[i]; break; }
     }
-    if (!chosen) {
-      for (var j = 0; j < list.length; j++) {
-        if (String(list[j].sendAsEmail || "") === email) { chosen = list[j]; break; }
-      }
-    }
     if (!chosen && list.length > 0) chosen = list[0];
     if (!chosen) {
-      gmailSignatureStatus_ = "No sendAs address found for " + email + ".";
+      gmailSignatureStatus_ = "No sendAs address found.";
       return empty;
     }
     var html = String(chosen.signature || "");
@@ -139,6 +135,7 @@ function getGmailSignature_() {
     gmailSignatureCache_ = { html: html, plain: plain };
     return gmailSignatureCache_;
   } catch (e) {
+    gmailSignatureStatus_ = "Signature fetch failed: " + e.message;
     return empty;
   }
 }
@@ -167,8 +164,14 @@ function checkGmailSignature() {
   gmailSignatureCache_ = null;
   gmailSignatureStatus_ = "";
   var sig = getGmailSignature_();
+  var account = "(unknown — Session call unavailable)";
+  try {
+    account = Session.getEffectiveUser().getEmail() || account;
+  } catch (e) {
+    // Never crash the diagnostic on the account lookup.
+  }
   SpreadsheetApp.getUi().alert("Gmail Signature Check",
-    "Account: " + Session.getEffectiveUser().getEmail() + "\n\n" +
+    "Account: " + account + "\n\n" +
     gmailSignatureStatus_ + "\n\n" +
     (sig.html ? "Signature preview (plain text):\n" + sig.plain : "No signature will be appended to the next send."),
     SpreadsheetApp.getUi().ButtonSet.OK);
