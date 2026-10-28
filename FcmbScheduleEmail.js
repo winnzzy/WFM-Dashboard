@@ -89,9 +89,17 @@ var gmailSignatureStatus_ = "";
  */
 function getFallbackSignature_() {
   try {
-    var html = String(PropertiesService.getScriptProperties()
+    var raw = String(PropertiesService.getScriptProperties()
       .getProperty("FCMB_SIGNATURE_HTML") || "").trim();
-    if (!html) return { html: "", plain: "" };
+    if (!raw) return { html: "", plain: "" };
+    // Plain-text paste support: if Winner pastes his
+    // signature as plain lines (no HTML tags), turn line
+    // breaks into <br> for the HTML email, so the lines
+    // do not run together. If it already contains HTML,
+    // leave it exactly as pasted.
+    var html = (raw.indexOf("<") === -1)
+      ? raw.replace(/\r?\n/g, "<br>")
+      : raw;
     var plain = html
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/p>/gi, "\n")
@@ -406,7 +414,13 @@ function sendPreviewedFcmbScheduleEmailMenu() {
     return;
   }
   var status = String(sh.getRange(1, 1).getValue() || "");
-  if (status.indexOf("SENT") >= 0) {
+  // BUG FIX 2026-10-28: never check for "SENT" alone. The
+  // preview status itself is "STATUS: PREVIEW — NOT SENT",
+  // which contains SENT, so every preview was wrongly
+  // reported as already sent and the FCMB email never
+  // went out. A real send writes "STATUS: SENT on …",
+  // so only "SENT on" counts as sent.
+  if (status.indexOf("SENT on") >= 0) {
     ui.alert("Send Previewed Schedule Email",
       "This preview has already been sent. To send a corrected schedule, run Preview Schedule Email to FCMB again first.",
       ui.ButtonSet.OK);

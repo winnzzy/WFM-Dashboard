@@ -40,9 +40,11 @@ function onOpen() {
     .addSeparator()
 
     .addItem("📧 Email Today's Break Schedules", "sendTodayScheduleEmailsMenu")
+    .addItem("🔁 Resend Today's Break Schedules", "sendTodayScheduleEmailsForceMenu")
     .addItem("📧 Preview Schedule Email to FCMB", "previewFcmbScheduleEmailMenu")
     .addItem("📤 Send Previewed Schedule Email", "sendPreviewedFcmbScheduleEmailMenu")
     .addItem("🔔 Send Break Reminders (next 15 min)", "sendBreakRemindersMenu")
+    .addItem("🔁 Resend Break Reminders (next 15 min)", "sendBreakRemindersForceMenu")
     .addItem("⏰ Check Overdue Breaks Now", "checkOverdueBreakAlertsMenu")
     .addItem("💬 Add WhatsApp Links to Daily Schedule", "addWhatsAppLinksToDailySchedule")
     .addItem("✅ Check WhatsApp Auto-Send Setup", "checkWhatsAppSetupMenu")

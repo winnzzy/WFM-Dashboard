@@ -319,10 +319,12 @@ function addWhatsAppLinksToDailySchedule() {
 /**
  * Sends every scheduled agent their full-day break schedule
  * by email. Skips agents with no/invalid Roster email and
- * agents already emailed for this schedule date. Returns a
- * summary { sent, skipped, errors[] }.
+ * agents already emailed for this schedule date, unless
+ * force is true — the Resend menu item, for when the team
+ * lead wants to send again on purpose. Returns a summary
+ * { sent, skipped, errors[] }.
  */
-function sendScheduleEmailsForToday() {
+function sendScheduleEmailsForToday(force) {
   var rows = readDailyScheduleRows();
   if (rows.length === 0) {
     throw new Error("No Daily Schedule found. Generate today's schedule first.");
@@ -347,7 +349,7 @@ function sendScheduleEmailsForToday() {
   rows.forEach(function(r) {
     var contact = contacts[r.agent] || {};
     var key = "schedule-email:" + dateLabel + ":" + r.agent;
-    if (hasAlreadySent(key)) {
+    if (!force && hasAlreadySent(key)) {
       skipped.push(r.agent + " (already sent today)");
       return;
     }
@@ -370,7 +372,7 @@ function sendScheduleEmailsForToday() {
       // Automatic WhatsApp, only when the Business API is configured.
       // A missing setup never fails the email that just went out.
       var waKey = "schedule-whatsapp:" + dateLabel + ":" + r.agent;
-      if (!hasAlreadySent(waKey)) {
+      if (force || !hasAlreadySent(waKey)) {
         var wa = sendWhatsAppViaApi(contact.phone, [
           r.agent,
           formatBreakTime(r.out) + " – " + formatBreakTime(r.back),
@@ -396,7 +398,7 @@ function sendScheduleEmailsForToday() {
 function sendTodayScheduleEmailsMenu() {
   var result;
   try {
-    result = sendScheduleEmailsForToday();
+    result = sendScheduleEmailsForToday(false);
   } catch (e) {
     SpreadsheetApp.getUi().alert("Schedule Emails", e.message, SpreadsheetApp.getUi().ButtonSet.OK);
     return;
@@ -408,8 +410,38 @@ function sendTodayScheduleEmailsMenu() {
     (result.skipped.length ? "\n• " + result.skipped.join("\n• ") : "") + "\n" +
     "Errors: " + result.errors.length +
     (result.errors.length ? "\n• " + result.errors.join("\n• ") : "") +
+    "\n\nTo send again to agents already emailed today, use Team Lead → Resend Today's Break Schedules." +
     "\n\nWhatsApp: use column K on Daily Schedule (tap 'Send on WhatsApp'), or set up the WhatsApp Business API in Script Properties for automatic sends — see Notifications.js.";
   SpreadsheetApp.getUi().alert("Schedule Emails", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Resend, on purpose: sends again to every scheduled agent
+ * with a valid email, even if they were already emailed
+ * today. Asks for confirmation first, because a resend is
+ * a real second email, not a retry of a failed one.
+ */
+function sendTodayScheduleEmailsForceMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var confirm = ui.alert("Resend Schedule Emails",
+    "Send the break schedule again to every scheduled agent with a valid email, even if they were already emailed today?\n\nThis sends a second email, not just a retry for failures.",
+    ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+  var result;
+  try {
+    result = sendScheduleEmailsForToday(true);
+  } catch (e) {
+    ui.alert("Resend Schedule Emails", e.message, ui.ButtonSet.OK);
+    return;
+  }
+  ui.alert("Resend Schedule Emails",
+    "Resent for " + result.dateLabel + ":\n\nSent: " + result.sent +
+    "\nAutomatic WhatsApp sends: " + (result.whatsappSent || 0) +
+    "\nSkipped: " + result.skipped.length +
+    (result.skipped.length ? "\n• " + result.skipped.join("\n• ") : "") +
+    "\nErrors: " + result.errors.length +
+    (result.errors.length ? "\n• " + result.errors.join("\n• ") : ""),
+    ui.ButtonSet.OK);
 }
 
 /**
@@ -470,7 +502,7 @@ function sendWhatsAppViaApi(phone, templateParams) {
  * Safe to run every 15 minutes via trigger — dedupe prevents
  * repeat sends for the same break.
  */
-function sendBreakReminders() {
+function sendBreakReminders(force) {
   var rows = readDailyScheduleRows();
   var contacts = getRosterMap();
   var now = new Date();
@@ -487,7 +519,7 @@ function sendBreakReminders() {
 
     var dateLabel = formatDateKey(r.out);
     var key = "break-reminder:" + dateLabel + ":" + r.agent + ":" + r.slot;
-    if (hasAlreadySent(key)) return;
+    if (!force && hasAlreadySent(key)) return;
 
     var contact = contacts[r.agent] || {};
     var minutes = Math.round(msUntil / 60000);
@@ -537,15 +569,30 @@ function sendBreakReminders() {
 }
 
 function sendBreakRemindersMenu() {
-  var result = sendBreakReminders();
+  var result = sendBreakReminders(false);
   SpreadsheetApp.getUi().alert(
     "Break Reminders",
     "Break reminders sent by email: " + result.sent +
     "\nAutomatic WhatsApp sends: " + result.whatsappAutoSent +
     (result.skipped.length ? "\n\nSkipped (no valid email):\n• " + result.skipped.join("\n• ") : "") +
+    "\n\nTo send again to agents already reminded for this break, use Team Lead → Resend Break Reminders (next 15 min)." +
     "\n\nFor agents without email, use the Daily Schedule column K WhatsApp link.",
     SpreadsheetApp.getUi().ButtonSet.OK
   );
+}
+
+function sendBreakRemindersForceMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var confirm = ui.alert("Resend Break Reminders",
+    "Send break reminders again to agents whose break starts within the next 15 minutes, even if they were already reminded for this break?\n\nThis sends a second reminder, not just a retry for failures.",
+    ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+  var result = sendBreakReminders(true);
+  ui.alert("Resend Break Reminders",
+    "Break reminders resent by email: " + result.sent +
+    "\nAutomatic WhatsApp sends: " + result.whatsappAutoSent +
+    (result.skipped.length ? "\n\nSkipped (no valid email):\n• " + result.skipped.join("\n• ") : ""),
+    ui.ButtonSet.OK);
 }
 
 /**
