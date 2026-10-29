@@ -255,6 +255,25 @@ function fcmbScheduleDateLabel() {
   return formatDateKey(new Date());
 }
 
+/**
+ * Reads a schedule date back from the preview sheet.
+ * Sheets turns a "2026-10-29" string written to a cell
+ * back into a Date object on read, so String() on it
+ * gives "Thu Oct 29 2026 ..." — not yyyy-MM-dd — and
+ * formatDateLong then built an invalid date that rendered
+ * as Thursday, 1 January 1970 in the sent email. Parse
+ * every shape properly instead, and fall back to the
+ * schedule's own date rather than ever returning epoch.
+ */
+function parsePreviewDateLabel_(raw) {
+  if (isValidDate(raw)) return formatDateKey(raw);
+  var s = String(raw || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var parsed = new Date(s);
+  if (isValidDate(parsed)) return formatDateKey(parsed);
+  return fcmbScheduleDateLabel();
+}
+
 function fcmbRecipientList() {
   return FCMB_SCHEDULE_RECIPIENTS.map(function(r) {
     return r.name + " <" + r.email + ">";
@@ -301,20 +320,24 @@ function buildFcmbSchedulePlainBody(dateLabel, rows) {
  * Inline styles only (Gmail-safe).
  */
 function buildFcmbScheduleHtml(dateLabel, rows) {
-  // Fixed table layout + nowrap times: Gmail was wrapping
-  // "11:00 AM" across two lines and stretching the Agent
-  // column, which is what made the test email look ugly.
-  // Column widths are fixed, times never wrap, every
-  // second row is shaded so rows stay easy to follow.
+  // Mobile-safe table: NO fixed layout, NO nowrap. The
+  // old fixed layout + nowrap is what overlapped on a
+  // phone — "Afternoon" and "3:00 PM" are wider than
+  // their fixed columns, so Gmail let them run into the
+  // next column instead of wrapping. With auto layout,
+  // long agent names wrap and each column takes the
+  // width its content actually needs, so nothing can
+  // overlap. Smaller padding/font keeps six columns
+  // inside a phone screen.
   var bodyRows = rows.map(function(r, i) {
     var bg = (i % 2 === 1) ? "background:#f9fafb;" : "";
     return "<tr style=\"" + bg + "\">" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;line-height:1.4;\">" + escapeHtml(r.agent) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;white-space:nowrap;\">" + escapeHtml(r.shift) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;white-space:nowrap;\">" + escapeHtml(r.queue) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;white-space:nowrap;\">" + escapeHtml(r.slot) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;font-weight:bold;white-space:nowrap;\">" + escapeHtml(formatBreakTime(r.out)) + "</td>" +
-      "<td style=\"padding:8px 10px;border-top:1px solid #e5e7eb;font-weight:bold;white-space:nowrap;\">" + escapeHtml(formatBreakTime(r.back)) + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;line-height:1.4;word-break:break-word;\">" + escapeHtml(r.agent) + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;\">" + escapeHtml(r.shift) + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;\">" + escapeHtml(r.queue) + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;\">" + escapeHtml(r.slot) + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;font-weight:bold;\">" + escapeHtml(formatBreakTime(r.out)) + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;font-weight:bold;\">" + escapeHtml(formatBreakTime(r.back)) + "</td>" +
       "</tr>";
   }).join("");
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:640px;margin:0 auto;\">" +
@@ -326,15 +349,14 @@ function buildFcmbScheduleHtml(dateLabel, rows) {
     "<p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;\">Hello,</p>" +
     "<p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;\">Please find below the daily schedule for " +
     escapeHtml(formatDateLong(dateLabel)) + ".</p>" +
-    "<table style=\"width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px;\">" +
-    "<colgroup><col style=\"width:28%\"><col style=\"width:15%\"><col style=\"width:15%\"><col style=\"width:12%\"><col style=\"width:15%\"><col style=\"width:15%\"></colgroup>" +
+    "<table style=\"width:100%;border-collapse:collapse;font-size:13px;\">" +
     "<tr style=\"background:#eaf6f5;\">" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Agent</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Shift</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Queue</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Break slot</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Out</th>" +
-    "<th style=\"padding:8px 10px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;white-space:nowrap;\">Back</th>" +
+    "<th style=\"padding:6px 8px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Agent</th>" +
+    "<th style=\"padding:6px 8px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Shift</th>" +
+    "<th style=\"padding:6px 8px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Queue</th>" +
+    "<th style=\"padding:6px 8px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Break slot</th>" +
+    "<th style=\"padding:6px 8px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Out</th>" +
+    "<th style=\"padding:6px 8px;text-align:left;color:#0b5563;border-bottom:2px solid #0b5563;\">Back</th>" +
     "</tr>" + bodyRows + "</table>" +
     "<p style=\"margin:20px 0 0;font-size:15px;line-height:1.5;\">Thank you.</p>" +
     fcmbSignatureHtml() +
@@ -367,7 +389,10 @@ function previewFcmbScheduleEmailMenu() {
   sh.getRange(3, 1).setValue("Subject").setFontWeight("bold");
   sh.getRange(3, 2).setValue(fcmbScheduleSubject(dateLabel));
   sh.getRange(4, 1).setValue("Schedule date").setFontWeight("bold");
-  sh.getRange(4, 2).setValue(dateLabel);
+  // Store the date as plain text, not a Sheets date: a
+  // date-typed cell reads back as a Date object, which
+  // is what broke the send step into a 1970 date.
+  sh.getRange(4, 2).setNumberFormat("@").setValue(dateLabel);
   sh.getRange(5, 1).setValue("Centre").setFontWeight("bold");
   sh.getRange(5, 2).setValue(FCMB_CENTRE);
   sh.getRange(6, 1, 1, 6).setValues([["Agent", "Shift", "Queue", "Break slot", "Out", "Back"]])
@@ -426,7 +451,7 @@ function sendPreviewedFcmbScheduleEmailMenu() {
       ui.ButtonSet.OK);
     return;
   }
-  var dateLabel = String(sh.getRange(4, 2).getValue() || fcmbScheduleDateLabel());
+  var dateLabel = parsePreviewDateLabel_(sh.getRange(4, 2).getValue());
   var data = sh.getRange(7, 1, Math.max(sh.getLastRow() - 6, 0), 6).getValues();
   var rows = [];
   data.forEach(function(d) {

@@ -95,9 +95,29 @@ function getWhatsAppChatLink(phone, message) {
  */
 function formatDateLong(dateLabel) {
   try {
-    var parts = String(dateLabel).split("-");
-    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    return Utilities.formatDate(d, "Africa/Lagos", "EEEE, d MMMM yyyy");
+    // A real Date object first: never String() it and split
+    // on "-", or the year/month/day come out NaN and
+    // Utilities.formatDate renders that as 1 January 1970
+    // (the Unix epoch) instead of throwing — that is
+    // exactly how a 1970 date reached a sent FCMB email.
+    if (isValidDate(dateLabel)) {
+      return Utilities.formatDate(dateLabel, "Africa/Lagos", "EEEE, d MMMM yyyy");
+    }
+    var s = String(dateLabel || "").trim();
+    var parts = s.split("-");
+    if (parts.length === 3) {
+      var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      // Never hand an invalid date to formatDate: it
+      // silently becomes the epoch instead of failing.
+      if (!isNaN(d.getTime())) {
+        return Utilities.formatDate(d, "Africa/Lagos", "EEEE, d MMMM yyyy");
+      }
+    }
+    var parsed = new Date(s);
+    if (isValidDate(parsed)) {
+      return Utilities.formatDate(parsed, "Africa/Lagos", "EEEE, d MMMM yyyy");
+    }
+    return s;
   } catch (e) {
     return String(dateLabel);
   }
