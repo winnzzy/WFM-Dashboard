@@ -305,7 +305,11 @@ function buildFcmbSchedulePlainBody(dateLabel, rows) {
   rows.forEach(function(r) {
     lines.push(r.agent + " — " + r.shift + " shift, " + r.queue +
       ", " + r.slot + ", break " + formatBreakTime(r.out) +
-      " – " + formatBreakTime(r.back));
+      " – " + formatBreakTime(r.back) +
+      (r.second
+        ? " + second break " + r.second.slot + " " + formatBreakTime(r.second.out) +
+          " – " + formatBreakTime(r.second.back)
+        : ""));
   });
   lines.push("");
   lines.push("Thank you.");
@@ -331,13 +335,20 @@ function buildFcmbScheduleHtml(dateLabel, rows) {
   // inside a phone screen.
   var bodyRows = rows.map(function(r, i) {
     var bg = (i % 2 === 1) ? "background:#f9fafb;" : "";
+    // Second break (Morning Call, 2026-11-10): a second line
+    // in the Slot/Out/Back cells. On the real send path the
+    // preview sheet already combined the two breaks into one
+    // string per cell, so that renders as-is instead.
+    var slotCell = r.second ? escapeHtml(r.slot) + "<br>" + escapeHtml(r.second.slot) : escapeHtml(r.slot);
+    var outCell = r.second ? escapeHtml(formatBreakTime(r.out)) + "<br>" + escapeHtml(formatBreakTime(r.second.out)) : escapeHtml(formatBreakTime(r.out));
+    var backCell = r.second ? escapeHtml(formatBreakTime(r.back)) + "<br>" + escapeHtml(formatBreakTime(r.second.back)) : escapeHtml(formatBreakTime(r.back));
     return "<tr style=\"" + bg + "\">" +
       "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;line-height:1.4;word-break:break-word;\">" + escapeHtml(r.agent) + "</td>" +
       "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;\">" + escapeHtml(r.shift) + "</td>" +
       "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;\">" + escapeHtml(r.queue) + "</td>" +
-      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;\">" + escapeHtml(r.slot) + "</td>" +
-      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;font-weight:bold;\">" + escapeHtml(formatBreakTime(r.out)) + "</td>" +
-      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;font-weight:bold;\">" + escapeHtml(formatBreakTime(r.back)) + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;\">" + slotCell + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;font-weight:bold;\">" + outCell + "</td>" +
+      "<td style=\"padding:6px 8px;border-top:1px solid #e5e7eb;font-weight:bold;\">" + backCell + "</td>" +
       "</tr>";
   }).join("");
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:640px;margin:0 auto;\">" +
@@ -400,8 +411,10 @@ function previewFcmbScheduleEmailMenu() {
     .setFontColor(COLORS.HEADER_TEXT)
     .setFontWeight("bold");
   var values = rows.map(function(r) {
-    return [r.agent, r.shift, r.queue, r.slot,
-      formatBreakTime(r.out), formatBreakTime(r.back)];
+    return [r.agent, r.shift, r.queue,
+      r.second ? r.slot + " + " + r.second.slot : r.slot,
+      r.second ? formatBreakTime(r.out) + " + " + formatBreakTime(r.second.out) : formatBreakTime(r.out),
+      r.second ? formatBreakTime(r.back) + " + " + formatBreakTime(r.second.back) : formatBreakTime(r.back)];
   });
   sh.getRange(7, 1, values.length, 6).setValues(values);
   sh.setFrozenRows(6);

@@ -69,35 +69,86 @@ const QUEUES = [
 ];
 
 /**
- * Special Morning break slots for the Call queue only.
+ * Morning Call agents get TWO 30-minute breaks, not one
+ * (2026-11-10, Winner): every other queue gets a full
+ * 60 minutes in one block, but Morning Call only got a
+ * single 30-minute slot — the second 30 minutes was
+ * never allotted. Afternoon Call already gets 60 minutes
+ * in one block (A1 3:00–4:00 PM), so this is Morning
+ * Call only.
+ *
+ * First breaks run late morning, back to back:
+ *   M1 11:00–11:30 AM, M2 11:30 AM–12:00 PM,
+ *   M3 12:00–12:30 PM, M4 12:30–1:00 PM.
+ * (The old M3/M4 at 3:00/3:30 PM are retired as first
+ * breaks: that window belongs to the Afternoon Call
+ * breaks, and the queue-coverage rule — no two Call
+ * breaks overlapping — would have rejected them anyway
+ * whenever an Afternoon Call agent was on break 3–4 PM.
+ * That is also why a third Morning Call agent used to
+ * overflow to an invented M6 slot instead of M3.)
+ *
+ * Second breaks run 1:30–3:00 PM, in the same order as
+ * the first breaks, so each agent's second break lands
+ * about 2 hours after their first and never overlaps
+ * another Call break — first or second — or the
+ * Afternoon Call breaks that start at 3:00 PM:
+ *   S1 1:30–2:00 PM, S2 2:00–2:30 PM, S3 2:30–3:00 PM.
+ * A fourth Morning Call agent overflows past S3 via the
+ * usual back-to-back fallback in findBreakAssignment.
  */
 const MORNING_CALL_BREAK_SLOTS = [
   { slot: "M1", start: "11:00 AM", end: "11:30 AM" },
   { slot: "M2", start: "11:30 AM", end: "12:00 PM" },
-  { slot: "M3", start: "3:00 PM", end: "3:30 PM" },
-  { slot: "M4", start: "3:30 PM", end: "4:00 PM" }
+  { slot: "M3", start: "12:00 PM", end: "12:30 PM" },
+  { slot: "M4", start: "12:30 PM", end: "1:00 PM" }
+];
+
+const MORNING_CALL_SECOND_BREAK_SLOTS = [
+  { slot: "S1", start: "1:30 PM", end: "2:00 PM" },
+  { slot: "S2", start: "2:00 PM", end: "2:30 PM" },
+  { slot: "S3", start: "2:30 PM", end: "3:00 PM" }
 ];
 
 /**
+ * Call-family queues: "Call" itself, and the combined
+ * queues that work the Call queue ("Calls/Clara",
+ * "Calls/Clara/Emails"). They all use the Morning Call
+ * 30-minute pattern when on Morning shift.
+ */
+function isCallFamilyQueue(queue) {
+  var queueKey = normalizeQueueName(queue);
+  return queueKey === "call" ||
+    queueKey === "calls/clara/emails" ||
+    queueKey === "calls/clara";
+}
+
+/**
  * Returns the break slots to use for a specific shift and queue.
- * Only Morning + Call uses the special 4-slot pattern.
+ * Only Morning + Call uses the special 30-minute pattern.
  *
  * @param {string} shift
  * @param {string} queue
  * @returns {Array<Object>}
  */
 function getBreakSlotsForShiftAndQueue(shift, queue) {
-  var queueKey = normalizeQueueName(queue);
-  var isCallFamilyQueue =
-    queueKey === "call" ||
-    queueKey === "calls/clara/emails" ||
-    queueKey === "calls/clara";
-
-  if (shift === "Morning" && isCallFamilyQueue) {
+  if (shift === "Morning" && isCallFamilyQueue(queue)) {
     return MORNING_CALL_BREAK_SLOTS;
   }
 
   return BREAK_SLOTS[shift] || [];
+}
+
+/**
+ * Second-break slots for a shift and queue, or [] when
+ * the agent gets no second break (everyone except
+ * Morning Call — see the note above).
+ */
+function getSecondBreakSlotsForShiftAndQueue(shift, queue) {
+  if (shift === "Morning" && isCallFamilyQueue(queue)) {
+    return MORNING_CALL_SECOND_BREAK_SLOTS;
+  }
+  return [];
 }
 
 /**

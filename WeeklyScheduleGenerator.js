@@ -322,7 +322,9 @@ function generateFromWeeklySchedule(dayOffset) {
   // =========================================================
   // STEP 5 — Run Scheduler logic (same rules as generateDailySchedule)
   // =========================================================
-  scheduleSheet.getRange("A2:J500").clearContent();
+  // Columns L–N now carry the second break (Morning Call
+  // only, 2026-11-10), so clear them too on regeneration.
+  scheduleSheet.getRange("A2:N500").clearContent();
   ops.getRange(
     OPS_DATA_START_ROW,
     1,
@@ -406,6 +408,51 @@ function generateFromWeeklySchedule(dayOffset) {
     });
 
     // =========================================================
+    // SECOND BREAK — Morning Call only (2026-11-10).
+    // Assigned right after the first break, from the
+    // 1:30-3:00 PM second-break slots, in first-break
+    // order. The same queue-coverage check runs, so a
+    // second break can never overlap another Call break
+    // (first or second) or an Afternoon Call break.
+    // Daily Operations keeps one row per agent for the
+    // first break; the second break lives on the Daily
+    // Schedule row (columns L-N), so dashboard counts,
+    // the daily report and break tracking are untouched.
+    // =========================================================
+    var secondBreak = null;
+    var secondSlots = getSecondBreakSlotsForShiftAndQueue(shift, agent.preferredQueue);
+    if (secondSlots.length > 0) {
+      var secondAssignment = findBreakAssignment({
+        agent: agent.name,
+        shift: shift,
+        preferredQueue: queue,
+        availableSlots: secondSlots,
+        scheduleDate: scheduleDate,
+        slotAssignments: slotAssignments,
+        scheduledBreaks: scheduledBreaks
+      });
+      if (!secondAssignment) {
+        throw new Error(
+          "No valid second break slot available for " + agent.name +
+          " during the " + shift + " shift under the current coverage rules."
+        );
+      }
+      secondBreak = {
+        slot: secondAssignment.slot.slot,
+        out: secondAssignment.scheduledOut,
+        back: secondAssignment.scheduledBack
+      };
+      scheduledBreaks.push({
+        agent: agent.name,
+        queue: queue,
+        shift: shift,
+        slot: secondBreak.slot,
+        start: secondBreak.out,
+        end: secondBreak.back
+      });
+    }
+
+    // =========================================================
     // BUILD SCHEDULE ROW
     // =========================================================
     var scheduledOut = selectedOut;
@@ -428,7 +475,11 @@ function generateFromWeeklySchedule(dayOffset) {
       selectedSlot.slot,
       scheduledOut,
       scheduledBack,
-      "Scheduled"
+      "Scheduled",
+      "", // K: WhatsApp link, filled in by addWhatsAppLinksToDailySchedule
+      secondBreak ? secondBreak.slot : "",
+      secondBreak ? secondBreak.out : "",
+      secondBreak ? secondBreak.back : ""
     ]);
 
     // =========================================================
@@ -462,8 +513,21 @@ function generateFromWeeklySchedule(dayOffset) {
   // STEP 6 & 7 — WRITE TO SHEETS (BATCH WRITE)
   // =========================================================
   if (scheduleRows.length > 0) {
+    // Second-break headers (columns L-N), set on every
+    // generation so they are there even on a sheet that
+    // was built before second breaks existed.
+    scheduleSheet.getRange(1, 12, 1, 3)
+      .setValues([["2nd Break Slot", "2nd Out", "2nd Back"]])
+      .setBackground(COLORS.HEADER_BG)
+      .setFontColor(COLORS.HEADER_TEXT)
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center");
+    scheduleSheet.setColumnWidth(12, 110);
+    scheduleSheet.setColumnWidth(13, 140);
+    scheduleSheet.setColumnWidth(14, 140);
+
     scheduleSheet
-      .getRange(2, 1, scheduleRows.length, 10)
+      .getRange(2, 1, scheduleRows.length, 14)
       .setValues(scheduleRows);
 
     // Display guard: Scheduled Out (H) / Scheduled Back (I) on the
@@ -473,6 +537,9 @@ function generateFromWeeklySchedule(dayOffset) {
     // Display only - slot assignment rules are untouched.
     scheduleSheet
       .getRange(2, 8, scheduleRows.length, 2)
+      .setNumberFormat("h:mm AM/PM");
+    scheduleSheet
+      .getRange(2, 13, scheduleRows.length, 2)
       .setNumberFormat("h:mm AM/PM");
   }
 

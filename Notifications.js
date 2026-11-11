@@ -148,13 +148,30 @@ function breakMinutes(outTime, backTime) {
  * the fallback, so it reads fine in any client. Tone:
  * warm and a little fun, but the times are the serious part.
  */
-function buildScheduleEmailHtml(agentName, shift, queue, slot, outTime, backTime, dateLabel) {
+function buildScheduleEmailHtml(agentName, shift, queue, slot, outTime, backTime, dateLabel, secondBreak) {
   var longDate = formatDateLong(dateLabel);
   var out = formatBreakTime(outTime);
   var back = formatBreakTime(backTime);
   var mins = breakMinutes(outTime, backTime);
-  var durationLine = mins > 0
-    ? "<div style=\"margin-top:4px;color:#475569;font-size:14px;\">" + mins + " minutes to recharge</div>"
+  // Morning Call agents get a second 30 minutes (2026-11-10):
+  // total break time is 60 minutes across two windows.
+  var secondOut = secondBreak ? formatBreakTime(secondBreak.out) : "";
+  var secondBack = secondBreak ? formatBreakTime(secondBreak.back) : "";
+  var secondMins = secondBreak ? breakMinutes(secondBreak.out, secondBreak.back) : 0;
+  var totalMins = mins + secondMins;
+  var durationLine = totalMins > 0
+    ? "<div style=\"margin-top:4px;color:#475569;font-size:14px;\">" + totalMins + " minutes to recharge" +
+      (secondBreak ? " (two 30-minute breaks)" : "") + "</div>"
+    : "";
+  var secondCard = secondBreak
+    ? "<div style=\"background:#eaf6f5;border-left:4px solid #f59e0b;padding:16px;border-radius:8px;text-align:center;margin-top:12px;\">" +
+      "<div style=\"font-size:12px;letter-spacing:1px;font-weight:bold;color:#0b5563;\">YOUR SECOND BREAK</div>" +
+      "<div style=\"font-size:28px;font-weight:bold;color:#0b5563;margin-top:6px;\">" + escapeHtml(secondOut) + " &ndash; " + escapeHtml(secondBack) + "</div>" +
+      "</div>"
+    : "";
+  var secondRows = secondBreak
+    ? "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Second break slot</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(secondBreak.slot) + "</td></tr>" +
+      "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Back on queue by (2nd)</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(secondBack) + "</td></tr>"
     : "";
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:560px;margin:0 auto;\">" +
     "<div style=\"background:#0b5563;color:#ffffff;padding:20px 24px;border-radius:12px 12px 0 0;\">" +
@@ -170,11 +187,13 @@ function buildScheduleEmailHtml(agentName, shift, queue, slot, outTime, backTime
     "<div style=\"font-size:28px;font-weight:bold;color:#0b5563;margin-top:6px;\">" + escapeHtml(out) + " &ndash; " + escapeHtml(back) + "</div>" +
     durationLine +
     "</div>" +
+    secondCard +
     "<table style=\"width:100%;border-collapse:collapse;margin-top:20px;font-size:15px;\">" +
     "<tr><td style=\"padding:8px 0;color:#6b7280;\">Shift</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;\">" + escapeHtml(shift) + "</td></tr>" +
     "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Queue</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(queue) + "</td></tr>" +
     "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Break slot</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(slot) + "</td></tr>" +
     "<tr><td style=\"padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;\">Back on queue by</td><td style=\"padding:8px 0;font-weight:bold;text-align:right;border-top:1px solid #f3f4f6;\">" + escapeHtml(back) + "</td></tr>" +
+    secondRows +
     "</table>" +
     "<p style=\"background:#fff7ed;border:1px solid #fde68a;padding:12px 14px;border-radius:8px;font-size:14px;line-height:1.5;\">" +
     "\u23f0 Please wrap up before " + escapeHtml(out) + " and be back on queue by " + escapeHtml(back) +
@@ -212,14 +231,18 @@ function buildReminderEmailHtml(agentName, shift, queue, outTime, backTime) {
  * fallback and WhatsApp so agents get identical facts on
  * both channels. The email HTML above is the pretty version.
  */
-function buildBreakMessage(agentName, shift, queue, slot, outTime, backTime, dateLabel) {
+function buildBreakMessage(agentName, shift, queue, slot, outTime, backTime, dateLabel, secondBreak) {
   return "Hi " + agentName + ",\n\n" +
     "Your break schedule for " + dateLabel + ":\n" +
     "• Shift: " + shift + "\n" +
     "• Queue: " + queue + "\n" +
     "• Break slot: " + slot + "\n" +
-    "• Break: " + formatBreakTime(outTime) + " – " + formatBreakTime(backTime) + "\n\n" +
-    "Please be back on queue by " + formatBreakTime(backTime) + ".";
+    "• Break: " + formatBreakTime(outTime) + " – " + formatBreakTime(backTime) + "\n" +
+    (secondBreak
+      ? "• Second break (" + secondBreak.slot + "): " + formatBreakTime(secondBreak.out) + " – " + formatBreakTime(secondBreak.back) + "\n"
+      : "") +
+    "\nPlease be back on queue by " + formatBreakTime(backTime) +
+    (secondBreak ? ", and by " + formatBreakTime(secondBreak.back) + " after your second break." : ".");
 }
 
 /**
@@ -262,19 +285,24 @@ function markSent(key) {
 
 /**
  * Reads the Daily Schedule sheet into rows:
- * { agent, center, supervisor, shift, queue, slot, out, back }.
+ * { agent, center, supervisor, shift, queue, slot, out, back,
+ *   second: { slot, out, back } | null }.
  * Daily Schedule columns: A # | B Agent | C Center | D Supervisor |
- * E Shift | F Queue | G Slot | H Out | I Back | J Status.
+ * E Shift | F Queue | G Slot | H Out | I Back | J Status |
+ * K WhatsApp | L 2nd Slot | M 2nd Out | N 2nd Back.
+ * The second break exists only for Morning Call agents
+ * (2026-11-10); everyone else has second: null.
  */
 function readDailyScheduleRows() {
   var ss = SpreadsheetApp.getActive();
   var sh = ss.getSheetByName(SHEETS.DAILY_SCHEDULE);
   if (!sh) return [];
-  var data = sh.getRange(2, 1, 499, 10).getValues();
+  var data = sh.getRange(2, 1, 499, 14).getValues();
   var rows = [];
   for (var i = 0; i < data.length; i++) {
     var name = String(data[i][1] || "").trim();
     if (!name) continue;
+    var secondSlot = String(data[i][11] || "").trim();
     rows.push({
       agent: name,
       center: data[i][2],
@@ -283,7 +311,10 @@ function readDailyScheduleRows() {
       queue: data[i][5],
       slot: data[i][6],
       out: data[i][7],
-      back: data[i][8]
+      back: data[i][8],
+      second: (secondSlot && isValidDate(data[i][12]) && isValidDate(data[i][13]))
+        ? { slot: secondSlot, out: data[i][12], back: data[i][13] }
+        : null
     });
   }
   return rows;
@@ -323,7 +354,7 @@ function addWhatsAppLinksToDailySchedule() {
     var contact = contacts[r.agent] || {};
     var link = getWhatsAppChatLink(
       contact.phone,
-      buildBreakMessage(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel)
+      buildBreakMessage(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel, r.second)
     );
     formulas.push([link
       ? '=HYPERLINK("' + link + '", "Send on WhatsApp")'
@@ -382,9 +413,9 @@ function sendScheduleEmailsForToday(force) {
       MailApp.sendEmail({
         to: contact.email,
         subject: "☕ Your break schedule for " + formatDateLong(dateLabel) + " — " + r.shift + " shift",
-        body: buildBreakMessage(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel) +
+        body: buildBreakMessage(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel, r.second) +
           "\n\n— Team Lead Dashboard",
-        htmlBody: buildScheduleEmailHtml(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel)
+        htmlBody: buildScheduleEmailHtml(r.agent, r.shift, r.queue, r.slot, r.out, r.back, dateLabel, r.second)
       });
       markSent(key);
       sent++;
@@ -532,7 +563,20 @@ function sendBreakReminders(force) {
   var skipped = [];
   var waAttempted = 0;
 
+  // One reminder entry per break, not per row: Morning Call
+  // agents have a second break (2026-11-10) and must be
+  // reminded for that one too, 15 minutes before it starts.
+  // The dedupe key includes the slot, so the two breaks
+  // never block each other.
+  var breaks = [];
   rows.forEach(function(r) {
+    breaks.push({ agent: r.agent, shift: r.shift, queue: r.queue, slot: r.slot, out: r.out, back: r.back });
+    if (r.second) {
+      breaks.push({ agent: r.agent, shift: r.shift, queue: r.queue, slot: r.second.slot, out: r.second.out, back: r.second.back });
+    }
+  });
+
+  breaks.forEach(function(r) {
     if (!isValidDate(r.out)) return;
     var msUntil = r.out.getTime() - now.getTime();
     if (msUntil < 0 || msUntil > windowMs) return;

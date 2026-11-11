@@ -9,7 +9,12 @@
 
 /** Break windows by shift (24-hour format, start inclusive, end exclusive). */
 var BREAK_WINDOWS = {
-  Morning:    { start: 12, end: 14 },
+  // Morning widened 2026-11-10 for the Morning Call second
+  // break: first breaks run 11:00 AM–1:00 PM and second
+  // breaks 1:30–3:00 PM, so a scheduled second break must
+  // not demand a supervisor override to start. Standard
+  // Morning breaks (12:00 PM–2:00 PM) are inside it too.
+  Morning:    { start: 11, end: 15 },
   Afternoon:  { start: 15, end: 17 },
   Night:      { start: 3,  end: 6  }
 };
