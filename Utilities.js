@@ -65,7 +65,7 @@ const QUEUES = [
   "Ebanqo",
   "Calls/Clara/Emails",
   "Calls/Clara",
-  "Chats",
+  "Email/Calls",
   "Training"
 ];
 
@@ -95,7 +95,7 @@ const QUEUES = [
  *   S1 1:30–2:00 PM, S2 2:00–2:30 PM, S3 2:30–3:00 PM.
  *
  * Headcount cap removed 2026-11-25 (Winner: no restriction
- * on how many agents may be put on Calls or Chats). The old
+ * on how many agents may be put on Calls or Clara). The old
  * zero-overlap coverage rule capped Morning Call at 3 agents:
  * a 4th agent's second break overflowed to 3:00 PM and hit
  * the Afternoon Call break, failing the whole generation.
@@ -140,14 +140,15 @@ const MAX_CONCURRENT_BREAKS_PER_QUEUE = 2;
 /**
  * Call-family queues: "Call" itself, and the combined
  * queues that work the Call queue ("Calls/Clara",
- * "Calls/Clara/Emails"). They all use the Morning Call
- * 30-minute pattern when on Morning shift.
+ * "Calls/Clara/Emails", "Email/Calls"). They all use the
+ * Morning Call 30-minute pattern when on Morning shift.
  */
 function isCallFamilyQueue(queue) {
   var queueKey = normalizeQueueName(queue);
   return queueKey === "call" ||
     queueKey === "calls/clara/emails" ||
-    queueKey === "calls/clara";
+    queueKey === "calls/clara" ||
+    queueKey === "email/calls";
 }
 
 /**
