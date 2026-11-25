@@ -10,8 +10,10 @@
  *   - Afternoon shift: 5 fixed break slots (A1–A5)
  *   - Night shift: 1 fixed break slot (N1)
  *   - Queue assignment: Uses Agent Roster queue (or all queues only when roster value is Auto)
- *   - Break slots: Max 2 agents per slot
- *   - No overlapping breaks within the same queue
+ *   - Break slots: max 2 agents on break at once per queue
+ *     (a free slot is preferred; doubling up only when every
+ *     slot is taken, 2026-11-25 — no headcount cap per queue)
+ *   - Never more than 2 overlapping breaks on the same queue
  */
 
 /**

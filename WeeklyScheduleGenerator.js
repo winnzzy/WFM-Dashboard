@@ -422,11 +422,26 @@ function generateFromWeeklySchedule(dayOffset) {
     var secondBreak = null;
     var secondSlots = getSecondBreakSlotsForShiftAndQueue(shift, agent.preferredQueue);
     if (secondSlots.length > 0) {
+      // Prefer the second-break slot starting about 2 hours
+      // after the first break ends (2026-11-25). With doubled
+      // slots, first-fitting order would hand the agent with
+      // the latest first break the earliest second break -
+      // e.g. a 12:30 PM first break followed by a 1:30 PM
+      // second, 30 minutes later. Sorting by distance from
+      // the 2-hour target keeps every agent's gap at ~2 hours.
+      var targetSecondStart = new Date(selectedBack.getTime() + 2 * 60 * 60000);
+      var orderedSecondSlots = secondSlots.slice().sort(function(a, b) {
+        var aStart = buildDateTime(scheduleDate, a.start);
+        var bStart = buildDateTime(scheduleDate, b.start);
+        var aDiff = aStart ? Math.abs(aStart.getTime() - targetSecondStart.getTime()) : 1e15;
+        var bDiff = bStart ? Math.abs(bStart.getTime() - targetSecondStart.getTime()) : 1e15;
+        return aDiff - bDiff;
+      });
       var secondAssignment = findBreakAssignment({
         agent: agent.name,
         shift: shift,
         preferredQueue: queue,
-        availableSlots: secondSlots,
+        availableSlots: orderedSecondSlots,
         scheduleDate: scheduleDate,
         slotAssignments: slotAssignments,
         scheduledBreaks: scheduledBreaks

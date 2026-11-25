@@ -14,7 +14,10 @@ var BREAK_WINDOWS = {
   // breaks 1:30–3:00 PM, so a scheduled second break must
   // not demand a supervisor override to start. Standard
   // Morning breaks (12:00 PM–2:00 PM) are inside it too.
-  Morning:    { start: 11, end: 15 },
+  // Widened again 2026-11-25 to 4:00 PM: the 7th Morning
+  // Call agent's second break (S4) starts 3:00 PM, and the
+  // end is exclusive, so end 15 would have flagged it.
+  Morning:    { start: 11, end: 16 },
   Afternoon:  { start: 15, end: 17 },
   Night:      { start: 3,  end: 6  }
 };

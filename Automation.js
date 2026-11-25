@@ -69,7 +69,7 @@ function startBreak() {
     OPS_COL_COUNT
   ).getValues();
 
-  var sameQueue = false;
+  var sameQueueOnBreak = 0;
   var otherCallOnQueue = 0;
 
   for (var i = 0; i < data.length; i++) {
@@ -82,7 +82,7 @@ function startBreak() {
     var rowQueueKey = normalizeQueueName(r[COL.QUEUE]);
 
     if (rowQueueKey === queueKey && r[COL.STATUS] === STATUS.ON_BREAK) {
-      sameQueue = true;
+      sameQueueOnBreak++;
     }
 
     // For Call queue, require at least one OTHER Call agent to remain
@@ -97,9 +97,13 @@ function startBreak() {
     }
   }
 
-  if (shouldEnforceQueueCoverage(shift) && sameQueue) {
+  // Same limit as generation (2026-11-25): at most
+  // MAX_CONCURRENT_BREAKS_PER_QUEUE agents on break at once
+  // on one queue. The old zero-overlap block would have
+  // refused to start a scheduled doubled break.
+  if (shouldEnforceQueueCoverage(shift) && sameQueueOnBreak >= MAX_CONCURRENT_BREAKS_PER_QUEUE) {
     SpreadsheetApp.getUi().alert(
-      "Another agent on '" + queue + "' is already on break."
+      "Two agents on '" + queue + "' are already on break."
     );
     return;
   }

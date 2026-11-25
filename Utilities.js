@@ -65,6 +65,7 @@ const QUEUES = [
   "Ebanqo",
   "Calls/Clara/Emails",
   "Calls/Clara",
+  "Chats",
   "Training"
 ];
 
@@ -90,12 +91,24 @@ const QUEUES = [
  *
  * Second breaks run 1:30–3:00 PM, in the same order as
  * the first breaks, so each agent's second break lands
- * about 2 hours after their first and never overlaps
- * another Call break — first or second — or the
- * Afternoon Call breaks that start at 3:00 PM:
+ * about 2 hours after their first:
  *   S1 1:30–2:00 PM, S2 2:00–2:30 PM, S3 2:30–3:00 PM.
- * A fourth Morning Call agent overflows past S3 via the
- * usual back-to-back fallback in findBreakAssignment.
+ *
+ * Headcount cap removed 2026-11-25 (Winner: no restriction
+ * on how many agents may be put on Calls or Chats). The old
+ * zero-overlap coverage rule capped Morning Call at 3 agents:
+ * a 4th agent's second break overflowed to 3:00 PM and hit
+ * the Afternoon Call break, failing the whole generation.
+ * Coverage now allows at most MAX_CONCURRENT_BREAKS_PER_QUEUE
+ * agents on break at once on one queue (see below), and
+ * assignment prefers a free slot first, doubling up only
+ * when every slot is taken — so the 4th–7th Morning Call
+ * agents share M1–M4 / S1–S3 two at a time, and the 7th
+ * takes the extra S4 slot:
+ *   S4 3:00–3:30 PM (shares the window with the Afternoon
+ *   Call break that starts at 3:00 PM; at most two agents
+ *   are on break then, and the rest of the Call queue is
+ *   still working).
  */
 const MORNING_CALL_BREAK_SLOTS = [
   { slot: "M1", start: "11:00 AM", end: "11:30 AM" },
@@ -107,8 +120,22 @@ const MORNING_CALL_BREAK_SLOTS = [
 const MORNING_CALL_SECOND_BREAK_SLOTS = [
   { slot: "S1", start: "1:30 PM", end: "2:00 PM" },
   { slot: "S2", start: "2:00 PM", end: "2:30 PM" },
-  { slot: "S3", start: "2:30 PM", end: "3:00 PM" }
+  { slot: "S3", start: "2:30 PM", end: "3:00 PM" },
+  { slot: "S4", start: "3:00 PM", end: "3:30 PM" }
 ];
+
+/**
+ * Maximum agents on break at the same time on one queue
+ * (2026-11-25, Winner: no headcount cap per queue). The
+ * Scheduler header always said "max 2 agents per slot";
+ * the old coverage code enforced zero overlap instead,
+ * which capped every queue at its fixed slot count. Two
+ * is safe here because assignment doubles up only when
+ * no free slot exists: a queue with 1–2 agents never
+ * doubles (a free slot always exists), and a bigger queue
+ * always keeps the rest of its agents on queue.
+ */
+const MAX_CONCURRENT_BREAKS_PER_QUEUE = 2;
 
 /**
  * Call-family queues: "Call" itself, and the combined
@@ -235,38 +262,48 @@ function findBreakAssignment(options) {
     });
   }
 
-  for (var i = 0; i < options.availableSlots.length; i++) {
-    var slot = options.availableSlots[i];
-    var candidateOut = buildDateTime(options.scheduleDate, slot.start);
-    var candidateBack = buildDateTime(options.scheduleDate, slot.end);
+  // Two passes (2026-11-25): first take a slot no one else on
+  // this queue is using; only when every slot is taken do we
+  // double up — never more than
+  // MAX_CONCURRENT_BREAKS_PER_QUEUE on break at once. This
+  // keeps existing agents' exact times while removing the
+  // headcount cap: extra Morning Call agents share M1–M4 /
+  // S1–S4 two at a time instead of failing generation.
+  for (var maxAllowed = 1; maxAllowed <= MAX_CONCURRENT_BREAKS_PER_QUEUE; maxAllowed++) {
+    for (var i = 0; i < options.availableSlots.length; i++) {
+      var slot = options.availableSlots[i];
+      var candidateOut = buildDateTime(options.scheduleDate, slot.start);
+      var candidateBack = buildDateTime(options.scheduleDate, slot.end);
 
-    if (!candidateOut || !candidateBack) {
-      throw new Error(
-        "Invalid break slot time for " + options.agent +
-        " (" + slot.start + " - " + slot.end + ")"
-      );
-    }
-
-    for (var q = 0; q < orderedQueueCandidates.length; q++) {
-      var candidateQueue = orderedQueueCandidates[q];
-
-      if (shouldEnforceQueueCoverage(options.shift)) {
-        if (hasQueueCoverageConflict(
-          options.scheduledBreaks,
-          candidateQueue,
-          candidateOut,
-          candidateBack
-        )) {
-          continue;
-        }
+      if (!candidateOut || !candidateBack) {
+        throw new Error(
+          "Invalid break slot time for " + options.agent +
+          " (" + slot.start + " - " + slot.end + ")"
+        );
       }
 
-      return {
-        slot: slot,
-        scheduledOut: candidateOut,
-        scheduledBack: candidateBack,
-        queue: candidateQueue
-      };
+      for (var q = 0; q < orderedQueueCandidates.length; q++) {
+        var candidateQueue = orderedQueueCandidates[q];
+
+        if (shouldEnforceQueueCoverage(options.shift)) {
+          if (hasQueueCoverageConflict(
+            options.scheduledBreaks,
+            candidateQueue,
+            candidateOut,
+            candidateBack,
+            maxAllowed
+          )) {
+            continue;
+          }
+        }
+
+        return {
+          slot: slot,
+          scheduledOut: candidateOut,
+          scheduledBack: candidateBack,
+          queue: candidateQueue
+        };
+      }
     }
   }
 
@@ -495,50 +532,75 @@ function breaksOverlap(startA, endA, startB, endB) {
 }
 
 /**
- * Returns true when a queue already has an overlapping break.
+ * Returns true when a queue already has too many overlapping
+ * breaks for the candidate window. `maxAllowed` is how many
+ * existing overlapping breaks are tolerated: 1 means a free
+ * slot only (first pass), 2 means double up (second pass).
+ * Defaults to MAX_CONCURRENT_BREAKS_PER_QUEUE.
  * @param {Array<Object>} assignments
  * @param {string} queue
  * @param {Date} start
  * @param {Date} end
+ * @param {number} maxAllowed
  * @returns {boolean}
  */
-function hasQueueCoverageConflict(assignments, queue, start, end) {
+function hasQueueCoverageConflict(assignments, queue, start, end, maxAllowed) {
   var queueKey = normalizeQueueName(queue);
+  var limit = (typeof maxAllowed === "number" && maxAllowed > 0)
+    ? maxAllowed
+    : MAX_CONCURRENT_BREAKS_PER_QUEUE;
 
-  return assignments.some(function(assignment) {
-    return normalizeQueueName(assignment.queue) === queueKey &&
-      breaksOverlap(assignment.start, assignment.end, start, end);
-  });
+  var overlapping = 0;
+  for (var i = 0; i < assignments.length; i++) {
+    var assignment = assignments[i];
+    if (normalizeQueueName(assignment.queue) !== queueKey) continue;
+    if (breaksOverlap(assignment.start, assignment.end, start, end)) {
+      overlapping++;
+      if (overlapping >= limit) return true;
+    }
+  }
+  return false;
 }
 
 /**
  * Validates break capacity and queue coverage on a generated schedule.
+ * Violation only when more than MAX_CONCURRENT_BREAKS_PER_QUEUE
+ * agents are on break at the same instant on one queue — two
+ * sharing a slot is allowed (2026-11-25), three is not.
+ * Sweep-line check, so staggered slots that merely touch at
+ * the edges do not count as overlapping.
  * @param {Array<Object>} assignments
  */
 function validateGeneratedBreakAssignments(assignments) {
-  for (var i = 0; i < assignments.length; i++) {
-    var current = assignments[i];
-    var currentQueueKey = normalizeQueueName(current.queue);
+  var byQueue = {};
+  assignments.forEach(function(a) {
+    if (!shouldEnforceQueueCoverage(a.shift)) return;
+    var key = normalizeQueueName(a.queue);
+    if (!byQueue[key]) byQueue[key] = [];
+    byQueue[key].push(a);
+  });
 
-    for (var j = i + 1; j < assignments.length; j++) {
-      var other = assignments[j];
-
-      if (!shouldEnforceQueueCoverage(current.shift) ||
-          !shouldEnforceQueueCoverage(other.shift)) {
-        continue;
+  Object.keys(byQueue).forEach(function(key) {
+    var list = byQueue[key];
+    var events = [];
+    list.forEach(function(a) {
+      events.push({ t: a.start.getTime(), d: 1, agent: a.agent });
+      events.push({ t: a.end.getTime(), d: -1, agent: a.agent });
+    });
+    // Ends before starts at equal times: back-to-back is not overlap.
+    events.sort(function(x, y) { return x.t - y.t || x.d - y.d; });
+    var concurrent = 0;
+    for (var i = 0; i < events.length; i++) {
+      concurrent += events[i].d;
+      if (concurrent > MAX_CONCURRENT_BREAKS_PER_QUEUE) {
+        throw new Error(
+          "Queue coverage violated for queue '" + list[0].queue +
+          "': more than " + MAX_CONCURRENT_BREAKS_PER_QUEUE +
+          " agents on break at once (around " + events[i].agent + ")."
+        );
       }
-
-      if (currentQueueKey !== normalizeQueueName(other.queue)) continue;
-      if (!breaksOverlap(current.start, current.end, other.start, other.end)) {
-        continue;
-      }
-
-      throw new Error(
-        "Queue coverage violated for queue '" + current.queue +
-        "' between " + current.agent + " and " + other.agent + "."
-      );
     }
-  }
+  });
 }
 
 /**
